@@ -21,8 +21,8 @@ DIST50KM = 50000
 DIST100KM = 100000
 
 """ Definitions of min and max route vertical level """
-ROUTE_MIN_HIGHT = 0
-ROUTE_MAX_HIGHT = 500
+ROUTE_MIN_HIGHT = -10000
+ROUTE_MAX_HIGHT = 50000
 
 """ Genetic Algorithm parameters """
 POPULATION_SIZE = 1
@@ -42,7 +42,8 @@ END_POINT = {
 }
 
 """ Definitions for plotting """
-PLOT_INIT = False
+# PLOT_INIT = False
+PLOT_INIT = True
 
 """ Definition of map borders """
 MAP_AREA_SIZE = 343 * DIST1KM

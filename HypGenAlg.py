@@ -2,7 +2,7 @@ from HypTypes import *
 from copy import deepcopy
 from typing import Dict
 import pandas as pd
-from HypGeo import evaluate_route_len_horizontal, plot_route_2d
+from HypGeo import evaluate_route_len, plot_route_2d
 import math
 
 
@@ -37,13 +37,15 @@ class Genotype:
         """ Initialize horizontal route path """
         self.__init_horizontal(grid=grid)
         route_length = self.__eval_h_route_len()
-        if PLOT_INIT:
-            plot_route_2d(plane=Plane.HORIZONTAL, p_dicts=[{'x': gen.point['x'], 'y': gen.point['y']} for gen in
-                                                           self.chromosome_h.gens])
 
         """ Initialize vertical route path """
         self.__init_vertical(route_length=route_length)
+        self.plot_init()
+
+    def plot_init(self) -> None:
         if PLOT_INIT:
+            plot_route_2d(plane=Plane.HORIZONTAL, p_dicts=[{'x': gen.point['x'], 'y': gen.point['y']} for gen in
+                                                           self.chromosome_h.gens])
             plot_route_2d(plane=Plane.VERTICAL, p_dicts=[{'z': gen.point['z'], 'd': gen.point['d']} for gen in
                                                          self.chromosome_v.gens], init_tangent=0)
 
@@ -97,8 +99,8 @@ class Genotype:
         Params:                                                                     type:
         :return: route length in horizontal plane                                   float
         """
-        return evaluate_route_len_horizontal(p_dicts=[{'x': gen.point['x'], 'y': gen.point['y']}
-                                                      for gen in self.chromosome_h.gens])
+        return evaluate_route_len(plane=Plane.HORIZONTAL, p_dicts=[{'x': gen.point['x'], 'y': gen.point['y']}
+                                                                   for gen in self.chromosome_h.gens])
 
     def __init_vertical(self, route_length: float) -> None:
         """
@@ -135,6 +137,47 @@ class Genotype:
 
         print('Genotype: initialized vertical: {}'.format([gen.point for gen in gens]))
 
+    def init_predefined(self, data_vector: np.array) -> None:
+        self.chromosome_h.gens[0].point['x'] = START_POINT['x']
+        self.chromosome_h.gens[0].point['y'] = START_POINT['y']
+        self.chromosome_h.gens[-1].point['x'] = END_POINT['x']
+        self.chromosome_h.gens[-1].point['y'] = END_POINT['y']
+
+        for gen_id in range(1, CHROMOSOME_SIZE - 1):
+            self.chromosome_h.gens[gen_id].point['x'] = data_vector[2 * (gen_id - 1)]
+            self.chromosome_h.gens[gen_id].point['y'] = data_vector[2 * (gen_id - 1) + 1]
+
+        horizontal_route_length = self.__eval_h_route_len()
+
+        self.chromosome_v.gens[0].point['z'] = START_POINT['z']
+        self.chromosome_v.gens[0].point['d'] = 0
+        self.chromosome_v.gens[-1].point['z'] = END_POINT['z']
+        self.chromosome_v.gens[-1].point['d'] = horizontal_route_length
+
+        for gen_id in range(1, CHROMOSOME_SIZE - 1):
+            self.chromosome_v.gens[gen_id].point['d'] = data_vector[2 * (gen_id - 1) + int(len(data_vector) / 2)]
+            self.chromosome_v.gens[gen_id].point['z'] = data_vector[2 * (gen_id - 1) + 1 + int(len(data_vector) / 2)]
+
+    def __eval_v_route_len(self) -> float:
+        """
+        Use HypGeo module to evuate route length in vertical
+        Params:                                                                     type:
+        :return: route length in vertical plane                                     float
+        """
+        return evaluate_route_len(plane=Plane.VERTICAL, p_dicts=[{'z': gen.point['z'], 'd': gen.point['d']}
+                                                                 for gen in self.chromosome_v.gens])
+
+    def get_route_length(self) -> float:
+        """
+        Get whole route length
+        Params:                                                                     type:
+        :return: route length                                                       float
+        """
+        return self.__eval_v_route_len()
+
+    def get_route_length_horizontal(self) -> float:
+        return self.__eval_h_route_len()
+
 
 class Population:
     """ Definition of Population - collection of Genotypes """
@@ -159,13 +202,13 @@ def is_point_in_range(x_req: int, y_req: int, grid: Dict[str, np.array]) -> bool
     :param x_req: Drawn x coordinate                                            int
     :param y_req: Drawn y coordinate                                            int
     :param grid: Holds x axis list, y axis list and mesh z values               Dict[str, np.array]
-    :return: True if frawn point is in map range, else False                    bool
+    :return: True if drawn point is in map range, else False                    bool
     """
     x_axis = grid['x']
     y_axis = grid['y']
 
-    if (x_req not in range((grid['x'])[0], (grid['x'])[-1])) or\
-            (y_req not in range((grid['y'])[0], (grid['y'])[-1])):
+    if (int(x_req) not in range((grid['x'])[0], (grid['x'])[-1])) or\
+            (int(y_req) not in range((grid['y'])[0], (grid['y'])[-1])):
         raise ValueError('Requested point ({},{}) out of map range! Ranges: x:({},{}) y:({},{})'.
                          format(x_req, y_req, (grid['x'])[0], (grid['x'])[-1], (grid['y'])[0], (grid['y'])[-1]))
 

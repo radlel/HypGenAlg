@@ -143,9 +143,9 @@ def get_route_len_2D(points: List[sp.Point2D], init_tangent: float) -> float:
 
     for desc in descs:
         if desc['segment'] is not None:
-            route_len += desc['segment'].length
+            route_len += float(desc['segment'].length)
         else:
-            route_len += (2 * sp.pi * desc['circle_radius_len']) * (abs(desc['arc_rad_len']) / (2 * sp.pi))
+            route_len += float(2 * sp.pi * float(desc['circle_radius_len']) * (abs(float(desc['arc_rad_len'] / (2 * sp.pi)))))
 
     return float(route_len)
 
@@ -169,7 +169,7 @@ def plot_route_2d(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.p
     elif plane == Plane.VERTICAL:
         route_len = (p_dicts[-1])['d'] - (p_dicts[-0])['d']
         ax.set_xlim((p_dicts[0])['d'] - 0.1 * route_len, (p_dicts[-1])['d'] + 0.1 * route_len)
-        ax.set_ylim(MAP_LIMIT['zmin'], MAP_LIMIT['zmax'])
+        ax.set_ylim((p_dicts[0])['d'] - 0.1 * route_len, (p_dicts[-1])['d'] + 0.1 * route_len)
 
     """ Get route description """
     points = dict_to_points(p_dicts=p_dicts, plane=plane)
@@ -269,16 +269,16 @@ def dict_to_points(p_dicts: List[Dict[str, int]], plane: Plane) -> List[sp.Point
     return p_out
 
 
-def evaluate_route_len_horizontal(p_dicts: List[Dict[str, int]], init_tangent=sp.pi/2) -> float:
+def evaluate_route_len(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.pi/2) -> float:
     """
     Compute route length in horizontal plane
     Params:                                                                     type:
+    :param plane:                                                               Plane
     :param p_dicts:                                                             List[Dict[str, int]]
     :param init_tangent:                                                        float
     :return:                                                                    float
     """
-    points = dict_to_points(p_dicts=p_dicts, plane=Plane.HORIZONTAL)
-    route_len = get_route_len_2D(points=points, init_tangent=init_tangent)
-    print('Calculated route length in horizontal plane: {}'.format(route_len))
+    points = dict_to_points(p_dicts=p_dicts, plane=plane)
+    route_len = get_route_len_2D(points=points, init_tangent=(sp.pi/2 if plane == Plane.HORIZONTAL else 0))
     return route_len
 
