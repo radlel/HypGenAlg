@@ -40,7 +40,8 @@ from HypTypes import *
 
 
 if '__main__' == __name__:
-    pop = Population(pop_size=1)
+    pop = Population(pop_size=POPULATION_SIZE)
     x, y, z = read_filtered_data()
     grid = {'x': x, 'y': y, 'z': z}
     pop.initialize(grid=grid)
+    pop.create_new_generation()

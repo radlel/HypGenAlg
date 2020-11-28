@@ -4,6 +4,7 @@ from typing import Dict
 import pandas as pd
 from HypGeo import evaluate_route_len, plot_route_2d
 import math
+from HypData import read_filtered_data
 
 
 class Gen:
@@ -178,6 +179,10 @@ class Genotype:
     def get_route_length_horizontal(self) -> float:
         return self.__eval_h_route_len()
 
+    def calculate_cost(self) -> float:
+        """ temporary cost calculation """
+        return self.get_route_length()
+
 
 class Population:
     """ Definition of Population - collection of Genotypes """
@@ -193,6 +198,60 @@ class Population:
         for genotype in self.genotypes:
             print('Population: initialize genotype {}'.format((list(self.genotypes)).index(genotype)))
             genotype.initialize(grid=grid)
+
+    def create_new_generation(self) -> None:
+
+        """ Create new offspring """
+        offspring = np.array([Genotype() for i in range(len(self.genotypes))])
+
+        """ select 30 best parents """
+        best_parents = self.__select_best_individuals(num_of_ind=NEWPOP_BEST_PARENTS_NUM)
+        offspring[NEWPOP_BEST_PARENTS_START:NEWPOP_BEST_PARENTS_NUM] = best_parents
+
+        """ use 15 best parents to cross over offspring and generate 50 of them """
+        children = self.__cross_over(num_of_ind=NEWPOP_CHILDREN_NUM, parents=best_parents)
+        offspring[NEWPOP_CHILDREN_START:NEWPOP_CHILDREN_START + NEWPOP_CHILDREN_NUM] = children
+
+        """ create random 20 individuals """
+        randoms = np.array([Genotype() for i in range(NEWPOP_RANDOM_NUM)])
+        x, y, z = read_filtered_data()
+        grid = {'x': x, 'y': y, 'z': z}
+        for random_ind in randoms:
+            random_ind.initialize(grid=grid)
+
+    def __select_best_individuals(self, num_of_ind: int) -> np.array:
+        costs_desc = [{'index': index, 'cost': genotype.calculate_cost()} for
+                      (index, genotype) in zip(range(len(self.genotypes)), self.genotypes)]
+
+        sorted_indexes = [index for cost, index in sorted(zip([item['cost'] for item in costs_desc],
+                                                              [item['index'] for item in costs_desc]))]
+
+        self.genotypes = np.array([self.genotypes[index] for index in sorted_indexes])
+        return np.array(self.genotypes[0: num_of_ind])
+
+    def __cross_over(self, num_of_ind: int, parents: np.array) -> np.array:
+        children = np.array([Genotype() for i in range(num_of_ind)])
+
+        for child in children:
+            cross_mask = np.random.choice([0, 1], CHROMOSOME_SIZE)
+            for i in range(CHROMOSOME_SIZE):
+                """ cross horizontal """
+                parent1_id, parent2_id = CROSS_SELECT[i]
+                parent1, parent2 = parents[parent1_id], parents[parent2_id]
+                child.chromosome_h.gens[i] = parent1.chromosome_h.gens[i] if cross_mask[i] == 0\
+                    else parent2.chromosome_h.gens[i]
+
+            cross_mask = np.random.choice([0, 1], CHROMOSOME_SIZE)
+            for i in range(CHROMOSOME_SIZE):
+                """ cross vertical """
+                parent1_id, parent2_id = CROSS_SELECT[i]
+                parent1, parent2 = parents[parent1_id], parents[parent2_id]
+                child.chromosome_v.gens[i] = parent1.chromosome_v.gens[i] if cross_mask[i] == 0 \
+                    else parent2.chromosome_v.gens[i]
+
+        return children
+
+
 
 
 def is_point_in_range(x_req: int, y_req: int, grid: Dict[str, np.array]) -> bool:
