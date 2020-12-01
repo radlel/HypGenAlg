@@ -2,11 +2,24 @@ from HypTypes import *
 from copy import copy, deepcopy
 from typing import Dict, Tuple, List, Union
 from HypGeo import get_route_description, plot_route_2d
-import collections
 from HypData import read_invalid_data
 import sympy as sp
 import pandas as pd
 import math
+
+
+""" Genetic Algorithm parameters """
+POPULATION_SIZE = 10
+CHROMOSOME_SIZE = 5
+NEWPOP_BEST_PARENTS_NUM = 3
+NEWPOP_BEST_PARENTS_START = 0
+NEWPOP_CHILDREN_NUM = 5
+NEWPOP_CHILDREN_START = 3
+NEWPOP_RANDOM_NUM = 2
+NEWPOP_RANDOM_START = 8
+GENERATIONS_NUM = 10
+ROUTE_RESOLUTION = 1000
+MATING_POINTS_MAX = 100
 
 
 class Gen:
@@ -296,7 +309,7 @@ class Population:
 
         print_population_info(title='New population', pop=self.individuals)
 
-        print('...FINISHED CREATION OF NEW GENERATION', '\n')
+        print('...FINISHED CREATION OF NEW GENERATION')
 
     def __get_best_individuals_sorted(self) -> np.array:
         individuals = deepcopy(self.individuals)
@@ -470,3 +483,32 @@ def print_population_info(title: str, pop: np.array) -> None:
         print('\t\tV:', gens_descs_v[index], '[{:4.2f}]'.format(tangs_v[index]), 'CRC:', crcs_v[index])
         print('\t\tF:', math.floor(pop[index].fitness()) / 1000)
         i += 1
+
+
+class GAModel:
+    def __init__(self):
+        self.population = Population(pop_size=POPULATION_SIZE)
+        self.population.initialize_random()
+        best_ind = self.population.get_best_individual()
+        print('\t^ Best fitness:', math.floor(best_ind.fitness()) / 1000, '\n')
+
+    def evaluate(self):
+        best_ind = None
+        for i in range(GENERATIONS_NUM):
+            print('Create new generation:', i)
+            self.population.create_new_generation()
+
+            best_ind = deepcopy(self.population.get_best_individual())
+            print('\t^ Best fitness:', math.floor(best_ind.fitness()) / 1000, '\n')
+
+        """ Plot best route """
+        best_route_desc_h = best_ind.fenotype.get_route_desc(plane=Plane.HORIZONTAL)
+        best_route_len_h = best_ind.fenotype.route_len_h
+        best_p_descs_h = best_ind.genotype.get_points_descs(plane=Plane.HORIZONTAL)
+        plot_route_2d(plane=Plane.HORIZONTAL, route_desc=best_route_desc_h, route_len=best_route_len_h,
+                      p_dicts=best_p_descs_h)
+
+        best_route_desc_v = best_ind.fenotype.get_route_desc(plane=Plane.VERTICAL)
+        best_route_len_v = best_ind.fenotype.route_len_total
+        plot_route_2d(plane=Plane.VERTICAL, route_desc=best_route_desc_v, route_len=best_route_len_v,
+                      p_dicts=best_ind.map_genotype_v_to_p_dicts())

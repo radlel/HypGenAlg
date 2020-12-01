@@ -166,7 +166,6 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
         ax.set_xlim(MAP_LIMIT['xmin'], MAP_LIMIT['xmax'])
         ax.set_ylim(MAP_LIMIT['ymin'], MAP_LIMIT['ymax'])
     elif plane == Plane.VERTICAL:
-        print('RL', route_len)
         ax.set_xlim(- 0.1 * route_len, 1.1 * route_len)
         ax.set_ylim(- 0.1 * route_len, 1.1 * route_len)
 
