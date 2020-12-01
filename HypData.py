@@ -15,6 +15,7 @@ NMT_PATH_SLA = r'/home/rl/Projects/Eng/Hyperloop/NMT/slaskie.txt'
 NMT_PATH_LOD = r'/home/rl/Projects/Eng/Hyperloop/NMT/lodzkie.txt'
 
 FILTERED_DATA_PATH = r'FilteredData/'
+INVALID_DATA_PATH = r'InvalidData/'
 
 NMT_PATHS = [NMT_PATH_MAL, NMT_PATH_MAZ, NMT_PATH_SWI, NMT_PATH_POD, NMT_PATH_LUB, NMT_PATH_SLA, NMT_PATH_LOD]
 
@@ -53,7 +54,7 @@ def get_axis_xyz_data(x_start: int, y_start: int, range_km: int, dist_m: int) ->
     """
 
     """ Check if parameters are correct """
-    if x_start % DIST1000M != 0 or y_start % DIST1000M != 0 or dist_m not in ALLOWED_DISTS:
+    if x_start % DIST1KM != 0 or y_start % DIST1KM != 0 or dist_m not in ALLOWED_DISTS:
         raise ValueError('Incorrect parameter value!')
 
     """ Prefilter input data """
@@ -116,4 +117,14 @@ def read_filtered_data() -> (np.array, np.array, np.array):
     z_data = np.array([elem[1:] for elem in z_data])
 
     return x_data, y_data, z_data
+
+
+def read_invalid_data() -> (np.array, np.array):
+    x_inv = np.array(pd.read_csv(INVALID_DATA_PATH + 'x_inv.csv'))
+    y_inv = np.array(pd.read_csv(INVALID_DATA_PATH + 'y_inv.csv'))
+
+    x_inv = np.array([elem[1] for elem in x_inv])
+    y_inv = np.array([elem[1] for elem in y_inv])
+
+    return x_inv, y_inv
 

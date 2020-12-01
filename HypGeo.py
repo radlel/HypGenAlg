@@ -130,18 +130,16 @@ def generate_arc_2D(point_A: sp.Point2D, point_B: sp.Point2D, ray_tangent_A: sp.
                 'segment': None}
 
 
-def get_route_len_2D(points: List[sp.Point2D], init_tangent: float) -> float:
+def get_route_len_2D(route_desc: List[Dict[str, Any]])-> float:
     """
     Calculate route length defined by parameter points ana tangent in first point
     Params:                                                                     type:
-    :param points: consecutive route points                                     List[Point2D]
-    :param init_tangent: Initial tangent angle in point A in radians            float
+    :param route_desc:
     :return: route length                                                       float
     """
-    route_len = 0
-    descs = generate_route_descs_2D(points=points, init_tangent=init_tangent)
 
-    for desc in descs:
+    route_len = 0
+    for desc in route_desc:
         if desc['segment'] is not None:
             route_len += float(desc['segment'].length)
         else:
@@ -150,13 +148,14 @@ def get_route_len_2D(points: List[sp.Point2D], init_tangent: float) -> float:
     return float(route_len)
 
 
-def plot_route_2d(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.pi/2) -> None:
+def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: float, p_dicts: List[Dict[str, int]]) -> None:
     """
     Plot route in 2D
     Params:                                                                     type:
-    :param plane: Horizontal or Vertical                                        Plane
-    :param p_dicts: list of consecutive route points                            List[Dict[str, int]]
-    :param init_tangent: Initial tangent angle in point A in radians            float
+    :param p_dicts:
+    :param plane:
+    :param route_len:
+    :param route_desc:
     :return: None
     """
 
@@ -167,15 +166,11 @@ def plot_route_2d(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.p
         ax.set_xlim(MAP_LIMIT['xmin'], MAP_LIMIT['xmax'])
         ax.set_ylim(MAP_LIMIT['ymin'], MAP_LIMIT['ymax'])
     elif plane == Plane.VERTICAL:
-        route_len = (p_dicts[-1])['d'] - (p_dicts[-0])['d']
-        ax.set_xlim((p_dicts[0])['d'] - 0.1 * route_len, (p_dicts[-1])['d'] + 0.1 * route_len)
-        ax.set_ylim((p_dicts[0])['d'] - 0.1 * route_len, (p_dicts[-1])['d'] + 0.1 * route_len)
+        print('RL', route_len)
+        ax.set_xlim(- 0.1 * route_len, 1.1 * route_len)
+        ax.set_ylim(- 0.1 * route_len, 1.1 * route_len)
 
-    """ Get route description """
-    points = dict_to_points(p_dicts=p_dicts, plane=plane)
-    descs = generate_route_descs_2D(points=points, init_tangent=init_tangent)
-
-    for desc in descs:
+    for desc in route_desc:
         if desc['segment'] is None:
             """ Add arc to plot """
             xR, yR = desc['point_cR'].coordinates
@@ -198,7 +193,7 @@ def plot_route_2d(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.p
 
             """ Add arc center point to plot """
             ax.scatter(pRx, pRy, cmap='viridis', linewidth=1)
-            ax.text(pRx, pRy, 'r' + str(descs.index(desc)) + str(descs.index(desc) + 1), color='black')
+            ax.text(pRx, pRy, 'r' + str(route_desc.index(desc)) + str(route_desc.index(desc) + 1), color='black')
 
         else:
             """ Add segment to plot """
@@ -269,16 +264,9 @@ def dict_to_points(p_dicts: List[Dict[str, int]], plane: Plane) -> List[sp.Point
     return p_out
 
 
-def evaluate_route_len(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent=sp.pi/2) -> float:
-    """
-    Compute route length in horizontal plane
-    Params:                                                                     type:
-    :param plane:                                                               Plane
-    :param p_dicts:                                                             List[Dict[str, int]]
-    :param init_tangent:                                                        float
-    :return:                                                                    float
-    """
-    points = dict_to_points(p_dicts=p_dicts, plane=plane)
-    route_len = get_route_len_2D(points=points, init_tangent=(sp.pi/2 if plane == Plane.HORIZONTAL else 0))
-    return route_len
-
+def get_route_description(plane: Plane, p_dicts: List[Dict[str, int]], init_tangent: float) ->(List[Dict[str, Any]],
+                                                                                               float):
+    points = dict_to_points(plane=plane, p_dicts=p_dicts)
+    route_desc = generate_route_descs_2D(points=points, init_tangent=float(init_tangent))
+    route_len = get_route_len_2D(route_desc=route_desc)
+    return route_desc, route_len
