@@ -9,15 +9,19 @@ import math
 
 
 """ Genetic Algorithm parameters """
-POPULATION_SIZE = 10
 CHROMOSOME_SIZE = 5
-NEWPOP_BEST_PARENTS_NUM = 3
+GENERATIONS_NUM = 20
+
+NEWPOP_BEST_PARENTS_NUM = 9
+NEWPOP_CHILDREN_NUM = 15
+NEWPOP_RANDOM_NUM = 6
+
+POPULATION_SIZE = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM + NEWPOP_RANDOM_NUM
+
 NEWPOP_BEST_PARENTS_START = 0
-NEWPOP_CHILDREN_NUM = 5
-NEWPOP_CHILDREN_START = 3
-NEWPOP_RANDOM_NUM = 2
-NEWPOP_RANDOM_START = 8
-GENERATIONS_NUM = 10
+NEWPOP_CHILDREN_START = NEWPOP_BEST_PARENTS_NUM
+NEWPOP_RANDOM_START = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM
+
 ROUTE_RESOLUTION = 1000
 MATING_POINTS_MAX = 100
 
@@ -329,7 +333,7 @@ class Population:
 
     def __cross_over(self, parents_sorted: np.array) -> np.array:
         """ """
-
+        print('\t\t\tStarted cross over...')
         """ Create new empty population - children """
         pop = Population(pop_size=NEWPOP_CHILDREN_NUM)
         children = pop.individuals
@@ -343,8 +347,9 @@ class Population:
             parents_mating_points.append(math.ceil(parents[0].fitness() /
                                                    parents[parent_id].fitness() *
                                                    MATING_POINTS_MAX)
-                                         + parents_mating_points[parent_id -1] if parent_id > 0 else 0)
+                                         + (parents_mating_points[parent_id -1] if parent_id > 0 else 0))
         mating_points_sum = parents_mating_points[-1]
+        print('\t\t\t\tParents mating points:', parents_mating_points)
 
         """ Process crossing procedure till all children are produced """
         while True:
@@ -366,6 +371,13 @@ class Population:
                 """ Check if parents already chosen """
                 if parent1 is not None and parent2 is not None:
                     break
+
+            print('\t\t\tDrawn parents: [{} {}]:, {} in ({},{}), {} in ({},{})'.
+                  format(list(parents).index(parent1), list(parents).index(parent2), mating_point1,
+                  parents_mating_points[list(parents).index(parent1) - 1],
+                  parents_mating_points[list(parents).index(parent1)], mating_point2,
+                  parents_mating_points[list(parents).index(parent2) - 1],
+                  parents_mating_points[list(parents).index(parent2)]))
 
             """ Check if chosen parents are not the same Individual """
             if ((parent1.genotype.checksum_h != parent2.genotype.checksum_h) and
@@ -417,10 +429,12 @@ class Population:
                      (crc_v_child not in [ind.genotype.checksum_v for ind in parents]))):
                     """ Add individual to new population """
                     children[child_id] = deepcopy(child)
+                    print('\t\t\t\tCrossed over child:', child_id)
                     child_id += 1
 
                     if child_id == NEWPOP_CHILDREN_NUM:
                         """ Produced all children, return """
+                        print('\t\t\t...Ended cross over')
                         return children
 
                     else:
@@ -428,10 +442,11 @@ class Population:
                         pass
                 else:
                     """ Individual already exists in population - go to beginning of the loop """
-                    pass
+                    print('\t\t\t*** Individual with at least one the same CRC already exists in population, draw '
+                          'another parents pair')
             else:
                 """ Invalid parents drawing - go to beginning of the loop """
-                pass
+                print('\t\t\t*** Parents has at least one same CRC, draw another parents pair')
 
 
 def is_point_valid(x_drawn: int, y_drawn: int, invalid_coordinates: Tuple[List[int], List[int]]) -> bool:
