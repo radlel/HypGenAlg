@@ -297,9 +297,14 @@ class Population:
             individual.fenotype.init_vertical(p_dicts=individual.map_genotype_v_to_p_dicts(),
                                               init_tangent=individual.genotype.chromosome_v.gen_init_tangent)
 
-        offspring[NEWPOP_CHILDREN_START:NEWPOP_CHILDREN_START + NEWPOP_CHILDREN_NUM] = deepcopy(children)
-
         print_population_info(title='Children after crossing over', pop=children)
+
+        """ Process mutation """
+        children = self.__mutate(children=children)
+
+        print_population_info(title='Children after mutation', pop=children)
+
+        offspring[NEWPOP_CHILDREN_START:NEWPOP_CHILDREN_START + NEWPOP_CHILDREN_NUM] = deepcopy(children)
 
         """ create random 20% individuals """
         random_pop = Population(pop_size=NEWPOP_RANDOM_NUM)
@@ -447,6 +452,37 @@ class Population:
             else:
                 """ Invalid parents drawing - go to beginning of the loop """
                 print('\t\t\t*** Parents has at least one same CRC, draw another parents pair')
+
+    def __mutate(self, children: np.array) -> np.array:
+        """ Generate mask indicating which children will be affected by mutation """
+        mutate_mask = np.random.choice(10, len(children))
+
+        for (mask_elem, child) in zip(mutate_mask, children):
+            """ Drawning 0 is 10% chance - mutations probability """
+            if mask_elem == 0:
+                """ Draw which gen will be affected """
+
+                mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
+
+                """ Draw new point and replace """
+                x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
+                                                             MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
+                y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
+                                                             MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
+
+                print('\t\t\tMutation will be applied: {} by {} on place {}'.format([(gen.point['x'], gen.point['y'])for gen in
+                                                                                     child.genotype.chromosome_h.gens],
+                                                                                    (x_drawn, y_drawn), mut_gen_id))
+
+                child.genotype.chromosome_h.gens[mut_gen_id].point['x'] = x_drawn
+                child.genotype.chromosome_h.gens[mut_gen_id].point['y'] = y_drawn
+
+            else:
+                """ Children is not about to be mutated, just pass """
+                pass
+
+        return children
+
 
 
 def is_point_valid(x_drawn: int, y_drawn: int, invalid_coordinates: Tuple[List[int], List[int]]) -> bool:
