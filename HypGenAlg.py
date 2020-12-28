@@ -252,13 +252,73 @@ class Individual:
         route_points = self.dicretize_route()
 
         """ Get vector of hight points from generatd route """
-
-
+        self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
 
 
 
         # TODO - route len as a cost only temporarly !!!
         return self.fenotype.route_len_h
+
+    def get_gen_route_hights(self, route_points: List[Dict[str, Union[int, float]]], route_v_descs: List[Dict[str, Any]]) ->\
+            Union[List[Dict[str, float]], None]:
+        # return None if invalid, points order is not ascending or arc angle bigger than pi
+        # - then fitness function know to add penalty cost
+
+        """ Check points order - must be ascending """
+        d_points_raw = [d_elem['d'] for d_elem in self.genotype.get_points_descs(plane=Plane.VERTICAL)]
+
+        if sorted(d_points_raw) != d_points_raw:
+            print('***++ Invalid points order!')
+            return None
+
+        """ Check if there are arc angles bigger than pi - if yes then route is invalid """
+        arc_rad_lens = [float(d_elem['arc_rad_len']) for d_elem in self.fenotype.route_desc_v]
+        for rad_len in arc_rad_lens:
+            if rad_len > np.pi:
+                print('***++ Rad len bigger than pi!')
+                return None
+
+        """ Evaluate common points of fallowing arcs """
+        d_points_mapped = [d_elem['d'] for d_elem in self.map_genotype_v_to_p_dicts()]
+
+        generated_route_z_values = []
+
+        for d_point in [d_elem['d'] for d_elem in route_points]:
+            if d_points_mapped[0] <= d_point < d_points_mapped[1]:
+                """ Take first arc for calcultaions """
+                arc_id = 0
+                pass
+            elif d_points_mapped[1] <= d_point < d_points_mapped[2]:
+                """ Take second arc for calcultaions """
+                arc_id = 1
+            elif d_points_mapped[2] <= d_point < d_points_mapped[3]:
+                """ Take third arc for calcultaions """
+                arc_id = 2
+            elif d_points_mapped[3] <= d_point <= d_points_mapped[4]:
+                """ Take fourth arc for calcultaions """
+                arc_id = 3
+            else:
+                raise ValueError('Only 5 points considered in here!')
+
+            z = self.get_gen_disc_point_hight(arc_desc=route_v_descs[arc_id], d_point=d_point)
+            generated_route_z_values.append({'d': d_point, 'z': z})
+
+        # plot_route_2d(plane=Plane.VERTICAL,
+        #               route_desc=route_v_descs,
+        #               route_len=self.fenotype.route_len_total,
+        #               p_dicts=generated_route_z_values)
+
+        return generated_route_z_values
+
+    def get_gen_disc_point_hight(self, arc_desc: Dict[str, Any], d_point: float):
+        d_center, z_center = arc_desc['point_cR'].coordinates
+        direction = ArcDirection.ANTICLOCKWISE if arc_desc['arc_rad_len'] >= 0 else ArcDirection.CLOCKWISE
+
+        alpha = np.arccos(float((d_point - d_center) / arc_desc['circle_radius_len']))
+        if direction == ArcDirection.ANTICLOCKWISE:
+            alpha += np.pi
+
+        return arc_desc['circle_radius_len'] * np.sin(alpha) + z_center
 
     def dicretize_route(self) -> List[Dict[str, Union[int, float]]]:
         curr_distance = 0.0
@@ -268,7 +328,7 @@ class Individual:
             curr_distance, points = self.discretize_arc(arc_desc=arc_desc, curr_dist=curr_distance)
             dicrete_route_points += points
 
-        dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': self.fenotype.route_len_h})
+        dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': math.floor(self.fenotype.route_len_h)})
 
         # plot_route_2d(plane=Plane.HORIZONTAL,
         #               route_desc=self.fenotype.route_desc_h,
@@ -318,7 +378,7 @@ class Individual:
 
                 db_arc_dist = float(2 * sp.pi * float(arc_desc['circle_radius_len']) * (abs(float(arc_desc['arc_rad_len'] / (2 * sp.pi)))))
                 # print('** ** ang_rest: {}, rest_dist: {}, ad: {}, db: {}'.format(ang_rest, rest_dist, arc_dist, db_arc_dist))
-                print('Discretized arc, dist:', arc_dist)
+                # print('Discretized arc, dist:', arc_dist)
 
         return distance, points
 
