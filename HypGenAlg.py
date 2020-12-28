@@ -25,6 +25,8 @@ NEWPOP_RANDOM_START = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM
 ROUTE_RESOLUTION = 1000
 MATING_POINTS_MAX = 100
 
+X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL = np.inf, np.inf, np.inf
+
 
 class Gen:
     """ Definition of Gen - coordinates of single point """
@@ -185,6 +187,7 @@ class Fenotype:
         self.route_len_total = np.inf
         self.route_desc_h = np.inf
         self.route_desc_v = np.inf
+        self.fitness_val = np.inf
 
     def init_horizontal(self, p_dicts: List[Dict[str, int]], init_tangent: float) -> None:
         route_desc, route_len = get_route_description(plane=Plane.HORIZONTAL, p_dicts=p_dicts, init_tangent=init_tangent)
@@ -242,6 +245,8 @@ class Individual:
         self.fenotype.init_vertical(p_dicts=self.map_genotype_v_to_p_dicts(),
                                     init_tangent=self.genotype.chromosome_v.gen_init_tangent)
 
+        self.fitness()
+
     def map_genotype_v_to_p_dicts(self) -> List[Dict[str, int]]:
         points_v = deepcopy(self.genotype.get_points_descs(plane=Plane.VERTICAL))
         route_len_h = copy(self.fenotype.route_len_h)
@@ -249,17 +254,22 @@ class Individual:
 
     def fitness(self) -> float:
         """ Check if route is not too long - if it is then it does not make sense to calculate cost """
+        # print('----- 0')
         if self.fenotype.route_len_total < DIST1000KM:
             """ Dicretize route """
             route_points = self.dicretize_route()
+            # print('----- 1')
             """ Further cost calculations makes sense only if route does not exceed region under analysis """
             if self.is_route_in_region(route_points=route_points) is True:
+                # print('----- 2')
                 """ Get vector of hight points from generatd route """
                 gen_route_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
+                # print('----- 3')
                 if gen_route_z_vals is not None:
                     """ Get vector of hight points from landform """
                     gen_z_vals = [elem['z'] for elem in gen_route_z_vals]
                     orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
+                    # print('----- 4')
                     if orig_landform_z_vals is not None:
                         if len(gen_route_z_vals) != len(orig_landform_z_vals):
                             raise ValueError('Len of arrays must be equal!')
@@ -267,15 +277,17 @@ class Individual:
 
                         """ Create vector of hight differences """
                         diff_vector_z = [gen_z_vals[i] - orig_landform_z_vals[i] for i in range(len(gen_z_vals))]
+                        # print('----- 5')
 
                         # debug
-                        import matplotlib.pyplot as plt
-                        plt.plot(range(len(diff_vector_z)), diff_vector_z)
-                        plt.grid()
-                        plt.show()
+                        # import matplotlib.pyplot as plt
+                        # plt.plot(range(len(diff_vector_z)), diff_vector_z)
+                        # plt.grid()
+                        # plt.show()
                         # end debug
 
                         # return self.calculate_route_cost(diff_vector_z=diff_vector_z)
+                        self.fenotype.fitness_val = self.fenotype.route_len_total
                         return self.fenotype.route_len_total
                     else:
                         """ Route crosses not known region - add penalty """
@@ -293,6 +305,8 @@ class Individual:
             """ Route too long - apply penalty cost """
             print('*** Penalty: PENALTY_ROUTETOOLONG')
             # return PENALTY_ROUTETOOLONG
+        # print('----- 6')
+        self.fenotype.fitness_val = self.fenotype.route_len_total
         return self.fenotype.route_len_total
         # # TODO - route len as a cost only temporarly !!!
         # return self.fenotype.route_len_h
@@ -302,15 +316,31 @@ class Individual:
 
     def is_route_in_region(self, route_points: List[Dict[str, Union[int, float]]]) -> bool:
         x_inv, y_inv = read_invalid_data()
-        for point in route_points:
-            if X_MIN_ALLOWED <= point['x'] <= X_MAX_ALLOWED and Y_MIN_ALLOWED <= point['y'] <= Y_MAX_ALLOWED:
-                if not is_point_valid(x_drawn=point['x'], y_drawn=point['y'], invalid_coordinates=(x_inv, y_inv)):
-                    print('point invalid')
-                    return False
-            else:
-                print('point out of range')
-                return False
-        return True
+        x_collection = [elem['x'] for elem in route_points]
+        y_collection = [elem['y'] for elem in route_points]
+        x_min = min(x_collection)
+        x_max = max(x_collection)
+        y_min = min(y_collection)
+        y_max = max(y_collection)
+
+        if (x_min >= X_MIN_ALLOWED and x_max <= X_MAX_ALLOWED and y_min >= Y_MIN_ALLOWED and y_max <= Y_MAX_ALLOWED and
+            is_point_valid(x_drawn=x_min, y_drawn=y_min, invalid_coordinates=(x_inv, y_inv)) and
+            is_point_valid(x_drawn=x_min, y_drawn=y_max, invalid_coordinates=(x_inv, y_inv)) and
+            is_point_valid(x_drawn=x_max, y_drawn=y_max, invalid_coordinates=(x_inv, y_inv)) and
+            is_point_valid(x_drawn=x_max, y_drawn=y_min, invalid_coordinates=(x_inv, y_inv))):
+            return True
+        else:
+            return False
+
+        # for point in route_points:
+        #     if X_MIN_ALLOWED <= point['x'] <= X_MAX_ALLOWED and Y_MIN_ALLOWED <= point['y'] <= Y_MAX_ALLOWED:
+        #         if not is_point_valid(x_drawn=point['x'], y_drawn=point['y'], invalid_coordinates=(x_inv, y_inv)):
+        #             print('point invalid')
+        #             return False
+        #     else:
+        #         print('point out of range')
+        #         return False
+        # return True
 
 
 
@@ -318,34 +348,25 @@ class Individual:
 
     def get_landform_route_heights(self, route_points: List[Dict[str, Union[int, float]]]) ->\
             Union[List[float], None]:
-        x_data, y_data, z_data = read_filtered_data()
         z_orig_vals = []
         for point in route_points:
             x, y = round(point['x'], -3), round(point['y'], -3)
 
             if x == X_MIN_ALLOWED - DIST1KM:
                 x = X_MIN_ALLOWED
-            elif x < X_MIN_ALLOWED:
-                return None
             elif x == X_MAX_ALLOWED + DIST1KM:
                 x = X_MAX_ALLOWED
-            elif x > X_MAX_ALLOWED:
-                return None
 
             if y == Y_MIN_ALLOWED - DIST1KM:
                 y = Y_MIN_ALLOWED
-            elif y < Y_MIN_ALLOWED:
-                return None
             elif y == Y_MAX_ALLOWED + DIST1KM:
                 y = Y_MAX_ALLOWED
-            elif y > Y_MAX_ALLOWED:
-                return None
 
-            z_orig_vals.append(get_axis_z_value(z_data=z_data,
+            z_orig_vals.append(get_axis_z_value(z_data=Z_DATA_FIL,
                                                     x_coordinate=x,
                                                     y_coordinate=y,
-                                                    x_req=x_data,
-                                                    y_req=y_data))
+                                                    x_req=X_DATA_FIL,
+                                                    y_req=Y_DATA_FIL))
         # print('>>>', z_orig_vals)
         return z_orig_vals
 
@@ -389,6 +410,8 @@ class Individual:
                 """ Take fourth arc for calcultaions """
                 arc_id = 3
             else:
+                print(d_points_mapped)
+                print(d_point)
                 raise ValueError('Only 5 points considered in here!')
 
             z = self.get_gen_disc_point_hight(arc_desc=route_v_descs[arc_id], d_point=d_point)
@@ -514,6 +537,10 @@ class Population:
 
         """ use best parents to cross over offspring and generate 50% of them """
         children = self.__cross_over(parents_sorted=best_to_worst_parents)
+
+        """ Process mutation """
+        children = self.__mutate(children=children)
+
         for individual in children:
             individual.fenotype.init_horizontal(p_dicts=individual.genotype.get_points_descs(plane=Plane.HORIZONTAL),
                                                 init_tangent=individual.genotype.chromosome_h.gen_init_tangent)
@@ -521,12 +548,9 @@ class Population:
             individual.fenotype.init_vertical(p_dicts=individual.map_genotype_v_to_p_dicts(),
                                               init_tangent=individual.genotype.chromosome_v.gen_init_tangent)
 
-        print_population_info(title='Children after crossing over', pop=children)
+            individual.fitness()
 
-        """ Process mutation """
-        children = self.__mutate(children=children)
-
-        print_population_info(title='Children after mutation', pop=children)
+        print_population_info(title='Children after crossing over and mutation', pop=children)
 
         offspring[NEWPOP_CHILDREN_START:NEWPOP_CHILDREN_START + NEWPOP_CHILDREN_NUM] = deepcopy(children)
 
@@ -546,7 +570,7 @@ class Population:
 
     def __get_best_individuals_sorted(self) -> np.array:
         individuals = deepcopy(self.individuals)
-        costs_desc = deepcopy([{'index': index, 'cost': individual.fitness()} for
+        costs_desc = deepcopy([{'index': index, 'cost': individual.fenotype.fitness_val} for
                               (index, individual) in zip(range(len(individuals)), individuals)])
         # print([item['cost'] for item in costs_desc])
 
@@ -573,8 +597,8 @@ class Population:
             top value of selection range, bottom selection range is previous value in list """
         parents_mating_points = []
         for parent_id in range(len(parents)):
-            parents_mating_points.append(math.ceil(parents[0].fitness() /
-                                                   parents[parent_id].fitness() *
+            parents_mating_points.append(math.ceil(parents[0].fenotype.fitness_val /
+                                                   parents[parent_id].fenotype.fitness_val *
                                                    MATING_POINTS_MAX)
                                          + (parents_mating_points[parent_id -1] if parent_id > 0 else 0))
         mating_points_sum = parents_mating_points[-1]
@@ -756,16 +780,18 @@ def print_population_info(title: str, pop: np.array) -> None:
     for index in range(len(pop)):
         print('\t{}\tH:'.format(i), gens_descs_h[index], '[{:4.2f}]'.format(tangs_h[index]), 'CRC:', crcs_h[index])
         print('\t\tV:', gens_descs_v[index], '[{:4.2f}]'.format(tangs_v[index]), 'CRC:', crcs_v[index])
-        print('\t\tF:', math.floor(pop[index].fitness()) / 1000)
+        print('\t\tF:', math.floor(pop[index].fenotype.fitness_val) / 1000)
         i += 1
 
 
 class GAModel:
     def __init__(self):
+        global X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL
+        X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL = read_filtered_data()
         self.population = Population(pop_size=POPULATION_SIZE)
         self.population.initialize_random()
         best_ind = self.population.get_best_individual()
-        print('\t^ Best fitness:', math.floor(best_ind.fitness()) / 1000, '\n')
+        print('\t^ Best fitness:', math.floor(best_ind.fenotype.fitness_val) / 1000, '\n')
 
     def evaluate(self):
         best_ind = None
@@ -774,7 +800,7 @@ class GAModel:
             self.population.create_new_generation()
 
             best_ind = deepcopy(self.population.get_best_individual())
-            print('\t^ Best fitness:', math.floor(best_ind.fitness()) / 1000, '\n')
+            print('\t^ Best fitness:', math.floor(best_ind.fenotype.fitness_val) / 1000, '\n')
 
         """ Plot best route """
         best_route_desc_h = best_ind.fenotype.get_route_desc(plane=Plane.HORIZONTAL)

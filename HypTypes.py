@@ -51,7 +51,7 @@ PENALTY_NOTKNOWNREGION = 100000
 
 """ Definitions for plotting """
 PLOT_INIT = False
-PLOT_FITNESS = True
+PLOT_FITNESS = False
 # PLOT_INIT = True
 
 """ Definition of map borders """
