@@ -248,55 +248,105 @@ class Individual:
         return [{'z': point['z'], 'd': math.floor(point['d'] / ROUTE_RESOLUTION * route_len_h)} for point in points_v]
 
     def fitness(self) -> float:
-        """ Dicretize route """
-        route_points = self.dicretize_route()
+        """ Check if route is not too long - if it is then it does not make sense to calculate cost """
+        if self.fenotype.route_len_total < DIST1000KM:
+            """ Dicretize route """
+            route_points = self.dicretize_route()
+            """ Further cost calculations makes sense only if route does not exceed region under analysis """
+            if self.is_route_in_region(route_points=route_points) is True:
+                """ Get vector of hight points from generatd route """
+                gen_route_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
+                if gen_route_z_vals is not None:
+                    """ Get vector of hight points from landform """
+                    gen_z_vals = [elem['z'] for elem in gen_route_z_vals]
+                    orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
+                    if orig_landform_z_vals is not None:
+                        if len(gen_route_z_vals) != len(orig_landform_z_vals):
+                            raise ValueError('Len of arrays must be equal!')
+                        # landform points must be valid here - all necessary conditions checked before
 
-        """ Get vector of hight points from generatd route """
-        gen_route_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
+                        """ Create vector of hight differences """
+                        diff_vector_z = [gen_z_vals[i] - orig_landform_z_vals[i] for i in range(len(gen_z_vals))]
 
-        """ Get vector of hight points from landform """
-        orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
+                        # debug
+                        import matplotlib.pyplot as plt
+                        plt.plot(range(len(diff_vector_z)), diff_vector_z)
+                        plt.grid()
+                        plt.show()
+                        # end debug
 
-        # TODO - route len as a cost only temporarly !!!
-        return self.fenotype.route_len_h
+                        # return self.calculate_route_cost(diff_vector_z=diff_vector_z)
+                        return self.fenotype.route_len_total
+                    else:
+                        """ Route crosses not known region - add penalty """
+                        print('*** Penalty: PENALTY_NOTKNOWNREGION')
+                        # return PENALTY_NOTKNOWNREGION
+                else:
+                    """ Invalid invalid due to points sequence or spiral - apply penalty cost """
+                    print('*** Penalty: PENALTY_SEQORSPIRAL')
+                    # return PENALTY_SEQORSPIRAL
+            else:
+                """ Route not in region - apply penalty cost """
+                print('*** Penalty: PENALTY_OUTOFREGION')
+                # return PENALTY_OUTOFREGION
+        else:
+            """ Route too long - apply penalty cost """
+            print('*** Penalty: PENALTY_ROUTETOOLONG')
+            # return PENALTY_ROUTETOOLONG
+        return self.fenotype.route_len_total
+        # # TODO - route len as a cost only temporarly !!!
+        # return self.fenotype.route_len_h
+
+    def calculate_route_cost(self, diff_vector_z: List[float]) -> float:
+        pass
+
+    def is_route_in_region(self, route_points: List[Dict[str, Union[int, float]]]) -> bool:
+        x_inv, y_inv = read_invalid_data()
+        for point in route_points:
+            if X_MIN_ALLOWED <= point['x'] <= X_MAX_ALLOWED and Y_MIN_ALLOWED <= point['y'] <= Y_MAX_ALLOWED:
+                if not is_point_valid(x_drawn=point['x'], y_drawn=point['y'], invalid_coordinates=(x_inv, y_inv)):
+                    print('point invalid')
+                    return False
+            else:
+                print('point out of range')
+                return False
+        return True
+
+
+
+
 
     def get_landform_route_heights(self, route_points: List[Dict[str, Union[int, float]]]) ->\
             Union[List[float], None]:
         x_data, y_data, z_data = read_filtered_data()
         z_orig_vals = []
         for point in route_points:
-            not_allowed = False
             x, y = round(point['x'], -3), round(point['y'], -3)
 
             if x == X_MIN_ALLOWED - DIST1KM:
                 x = X_MIN_ALLOWED
             elif x < X_MIN_ALLOWED:
-                """ out of map,  """
-                not_allowed = True
-            elif x == X_MAX_ALLOWED - DIST1KM:
+                return None
+            elif x == X_MAX_ALLOWED + DIST1KM:
                 x = X_MAX_ALLOWED
             elif x > X_MAX_ALLOWED:
-                not_allowed = True
+                return None
 
             if y == Y_MIN_ALLOWED - DIST1KM:
                 y = Y_MIN_ALLOWED
             elif y < Y_MIN_ALLOWED:
-                """ out of map,  """
-                not_allowed = True
-            elif y == Y_MAX_ALLOWED - DIST1KM:
+                return None
+            elif y == Y_MAX_ALLOWED + DIST1KM:
                 y = Y_MAX_ALLOWED
             elif y > Y_MAX_ALLOWED:
-                not_allowed = True
+                return None
 
-            if not_allowed is True:
-                z_orig_vals.append(np.inf)
-            else:
-                z_orig_vals.append(get_axis_z_value(z_data=z_data,
+            z_orig_vals.append(get_axis_z_value(z_data=z_data,
                                                     x_coordinate=x,
                                                     y_coordinate=y,
                                                     x_req=x_data,
                                                     y_req=y_data))
-        print('>>>', z_orig_vals)
+        # print('>>>', z_orig_vals)
         return z_orig_vals
 
 
@@ -344,10 +394,11 @@ class Individual:
             z = self.get_gen_disc_point_hight(arc_desc=route_v_descs[arc_id], d_point=d_point)
             generated_route_z_values.append({'d': d_point, 'z': z})
 
-        # plot_route_2d(plane=Plane.VERTICAL,
-        #               route_desc=route_v_descs,
-        #               route_len=self.fenotype.route_len_total,
-        #               p_dicts=generated_route_z_values)
+        if PLOT_FITNESS:
+            plot_route_2d(plane=Plane.VERTICAL,
+                          route_desc=route_v_descs,
+                          route_len=self.fenotype.route_len_total,
+                          p_dicts=generated_route_z_values)
 
         return generated_route_z_values
 
@@ -371,10 +422,11 @@ class Individual:
 
         dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': math.floor(self.fenotype.route_len_h)})
 
-        plot_route_2d(plane=Plane.HORIZONTAL,
-                      route_desc=self.fenotype.route_desc_h,
-                      route_len=self.fenotype.route_len_h,
-                      p_dicts=dicrete_route_points)
+        if PLOT_FITNESS:
+            plot_route_2d(plane=Plane.HORIZONTAL,
+                          route_desc=self.fenotype.route_desc_h,
+                          route_len=self.fenotype.route_len_h,
+                          p_dicts=dicrete_route_points)
 
         return dicrete_route_points
 

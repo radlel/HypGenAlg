@@ -14,8 +14,8 @@ NMT_PATH_LUB = r'/home/rl/Projects/Eng/Hyperloop/NMT/lubelskie.txt'
 NMT_PATH_SLA = r'/home/rl/Projects/Eng/Hyperloop/NMT/slaskie.txt'
 NMT_PATH_LOD = r'/home/rl/Projects/Eng/Hyperloop/NMT/lodzkie.txt'
 
-FILTERED_DATA_PATH = r'FilteredData/'
-INVALID_DATA_PATH = r'InvalidData/'
+FILTERED_DATA_PATH = r'FilteredData\\'
+INVALID_DATA_PATH = r'InvalidData\\'
 
 NMT_PATHS = [NMT_PATH_MAL, NMT_PATH_MAZ, NMT_PATH_SWI, NMT_PATH_POD, NMT_PATH_LUB, NMT_PATH_SLA, NMT_PATH_LOD]
 
