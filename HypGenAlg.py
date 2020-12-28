@@ -2,7 +2,7 @@ from HypTypes import *
 from copy import copy, deepcopy
 from typing import Dict, Tuple, List, Union, Any
 from HypGeo import get_route_description, plot_route_2d, dir_to_rad
-from HypData import read_invalid_data
+from HypData import read_invalid_data, read_filtered_data, get_axis_z_value
 import sympy as sp
 import pandas as pd
 import math
@@ -216,8 +216,8 @@ class Fenotype:
         self.route_len_total = route_len
         self.route_desc_v = route_desc
 
-        if PLOT_INIT:
-            plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
+        # if PLOT_INIT:
+        # plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
 
     def get_route_desc(self, plane: Plane):
         if plane == Plane.HORIZONTAL:
@@ -252,12 +252,53 @@ class Individual:
         route_points = self.dicretize_route()
 
         """ Get vector of hight points from generatd route """
-        self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
+        gen_route_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
 
-
+        """ Get vector of hight points from landform """
+        orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
 
         # TODO - route len as a cost only temporarly !!!
         return self.fenotype.route_len_h
+
+    def get_landform_route_heights(self, route_points: List[Dict[str, Union[int, float]]]) ->\
+            Union[List[float], None]:
+        x_data, y_data, z_data = read_filtered_data()
+        z_orig_vals = []
+        for point in route_points:
+            not_allowed = False
+            x, y = round(point['x'], -3), round(point['y'], -3)
+
+            if x == X_MIN_ALLOWED - DIST1KM:
+                x = X_MIN_ALLOWED
+            elif x < X_MIN_ALLOWED:
+                """ out of map,  """
+                not_allowed = True
+            elif x == X_MAX_ALLOWED - DIST1KM:
+                x = X_MAX_ALLOWED
+            elif x > X_MAX_ALLOWED:
+                not_allowed = True
+
+            if y == Y_MIN_ALLOWED - DIST1KM:
+                y = Y_MIN_ALLOWED
+            elif y < Y_MIN_ALLOWED:
+                """ out of map,  """
+                not_allowed = True
+            elif y == Y_MAX_ALLOWED - DIST1KM:
+                y = Y_MAX_ALLOWED
+            elif y > Y_MAX_ALLOWED:
+                not_allowed = True
+
+            if not_allowed is True:
+                z_orig_vals.append(np.inf)
+            else:
+                z_orig_vals.append(get_axis_z_value(z_data=z_data,
+                                                    x_coordinate=x,
+                                                    y_coordinate=y,
+                                                    x_req=x_data,
+                                                    y_req=y_data))
+        print('>>>', z_orig_vals)
+        return z_orig_vals
+
 
     def get_gen_route_hights(self, route_points: List[Dict[str, Union[int, float]]], route_v_descs: List[Dict[str, Any]]) ->\
             Union[List[Dict[str, float]], None]:
@@ -330,10 +371,10 @@ class Individual:
 
         dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': math.floor(self.fenotype.route_len_h)})
 
-        # plot_route_2d(plane=Plane.HORIZONTAL,
-        #               route_desc=self.fenotype.route_desc_h,
-        #               route_len=self.fenotype.route_len_h,
-        #               p_dicts=dicrete_route_points)
+        plot_route_2d(plane=Plane.HORIZONTAL,
+                      route_desc=self.fenotype.route_desc_h,
+                      route_len=self.fenotype.route_len_h,
+                      p_dicts=dicrete_route_points)
 
         return dicrete_route_points
 

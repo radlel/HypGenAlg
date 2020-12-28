@@ -99,7 +99,13 @@ def get_axis_z_value(z_data: np.array, x_coordinate: int, y_coordinate: int, x_r
     :param y_req: Axis x requested range                                        List
     :return: Hight value
     """
-    return z_data[x_req.index(x_coordinate)][y_req.index(y_coordinate)]
+    return z_data[list(x_req).index(round(x_coordinate))][list(y_req).index(round(y_coordinate))]
+
+
+def read_z_data() -> np.array:
+    z_data = np.array(pd.read_csv(FILTERED_DATA_PATH + 'z.csv'))
+    z_data = np.array([elem[1:] for elem in z_data])
+    return z_data
 
 
 def read_filtered_data() -> (np.array, np.array, np.array):
