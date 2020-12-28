@@ -205,13 +205,14 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
     """ Add points to plot """
     for point in p_dicts:
         x, y = (point['x'], point['y']) if (plane == Plane.HORIZONTAL) else (point['d'], point['z'])
-        ax.scatter(x, y, cmap='viridis', linewidth=2)
+        ax.scatter(x, y, cmap='viridis', linewidth=1)
         if point == p_dicts[0]:
             ax.text(x, y, 'KRK', color='black')
         elif point == p_dicts[-1]:
             ax.text(x, y, 'WAW', color='black')
         else:
-            ax.text(x, y, str(p_dicts.index(point)), color='black')
+            # ax.text(x, y, str(p_dicts.index(point)), color='black')
+            pass
 
     ax.grid()
     plt.show()

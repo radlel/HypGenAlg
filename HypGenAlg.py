@@ -248,64 +248,34 @@ class Individual:
         return [{'z': point['z'], 'd': math.floor(point['d'] / ROUTE_RESOLUTION * route_len_h)} for point in points_v]
 
     def fitness(self) -> float:
-        # TODO - route len as a cost only temporarly !!!
-        self.dicretize_route()
-        return self.fenotype.route_len_total
+        """ Dicretize route """
+        route_points = self.dicretize_route()
 
-    # def dicretize_route(self) -> List[Dict[str, Union[int, float]]]:
-    #     current_distance = 0
-    #     route_discretized = []
-    #
-    #     for arc_desc in self.fenotype.route_desc_h:
-    #         """ Calculate what angle for particular arc gives 1km distance """
-    #         ang_1km_fraction = DIST1KM / float(2 * sp.pi * arc_desc['circle_radius_len'])
-    #         ang_1km_rad = 2 * sp.pi * ang_1km_fraction
-    #
-    #         """ Evaluate how many 1km steps can be obtained using this arc """
-    #         n_1km_steps = math.ceil(abs(arc_desc['arc_rad_len']) / ang_1km_rad)
-    #         print('***** n:', n_1km_steps)
-    #
-    #         """ Create object representing circle """
-    #         circle = sp.Circle(arc_desc['point_cR'], arc_desc['circle_radius_len'])
-    #         print('***** c:', circle)
-    #
-    #         i = 0
-    #         """ Evaluate discretized route coordinates """
-    #         for ray_id in range(n_1km_steps + 1):
-    #             # print('***** ch')
-    #             angle = (float(dir_to_rad(arc_desc['ray_RA'].direction)))
-    #             # print('***** ch1')
-    #             angle += float(ray_id * (ang_1km_rad if arc_desc['arc_rad_len'] > 0 else -ang_1km_rad))
-    #             # print('***** ch2')
-    #             ray = sp.Ray2D(arc_desc['point_cR'], angle=angle)
-    #             # print('***** ch3')
-    #
-    #             route_point = circle.intersection(ray)
-    #             # print('***** rp:', route_point)
-    #             x, y = route_point[0].coordinates
-    #             route_discretized.append({'x': x, 'y': y, 'd': current_distance})
-    #
-    #             dist = float(ang_1km_fraction / (2 * sp.pi)) * 2 * sp.pi * arc_desc['circle_radius_len']
-    #             current_distance += dist
-    #             print('***** {}/{}'.format(i, n_1km_steps))
-    #             i += 1
-    #
-    #         """ Add the rest of arc do distance """
-    #         ang_rest = abs(arc_desc['arc_rad_len']) - n_1km_steps * ang_1km_rad
-    #         current_distance += float(2 * sp.pi * float(arc_desc['circle_radius_len']) * (ang_rest / (2 * sp.pi)))
-    #     print('***** d: {}'.format(current_distance))
-    #     return route_discretized
+        """ Get vector of hight points from generatd route """
+
+
+
+
+
+        # TODO - route len as a cost only temporarly !!!
+        return self.fenotype.route_len_h
 
     def dicretize_route(self) -> List[Dict[str, Union[int, float]]]:
         curr_distance = 0.0
         dicrete_route_points = []
+
         for arc_desc in self.fenotype.route_desc_h:
-            dist, points = self.discretize_arc(arc_desc=arc_desc, curr_dist=curr_distance)
-
+            curr_distance, points = self.discretize_arc(arc_desc=arc_desc, curr_dist=curr_distance)
             dicrete_route_points += points
-            curr_distance += dist
-        print('*****', round(curr_distance / 1000, 3), len(dicrete_route_points))
 
+        dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': self.fenotype.route_len_h})
+
+        # plot_route_2d(plane=Plane.HORIZONTAL,
+        #               route_desc=self.fenotype.route_desc_h,
+        #               route_len=self.fenotype.route_len_h,
+        #               p_dicts=dicrete_route_points)
+
+        return dicrete_route_points
 
     def discretize_arc(self, arc_desc: Dict[str, Any], curr_dist: float):
         arc_rad_len = float(arc_desc['arc_rad_len'])
@@ -315,12 +285,14 @@ class Individual:
 
         points = []
         distance = curr_dist
-
-        ang_1km_fraction = DIST1KM / float(2 * np.pi * circle_radius_len)
+        arc_dist = 0.0
+        ang_1km_fraction = DIST1KM / float(2 * sp.pi * circle_radius_len)
         ang_1km_rad = float(2 * np.pi * ang_1km_fraction)
         base_angle = float(dir_to_rad(arc_desc['ray_RA'].direction))
 
         n_1km_steps = math.ceil(abs(arc_rad_len) / ang_1km_rad)
+
+        # print('** ** r: {}, f: {}, s:{}, d: {}, dir: {}'.format(round(circle_radius_len, 4), ang_1km_fraction, n_1km_steps, distance, direction))
 
         for p_id in range(n_1km_steps):
             if direction == ArcDirection.ANTICLOCKWISE:
@@ -333,21 +305,22 @@ class Individual:
 
             points.append({'x': x, 'y': y, 'd': distance})
 
-            distance += float((ang_1km_fraction / (2 * np.pi)) * 2 * np.pi * circle_radius_len)
+            if p_id != n_1km_steps - 1:
+                dist_temp = float((ang_1km_fraction) * 2 * np.pi * circle_radius_len)
+                # print('** ** r: {}, af: {}, len: {}'.format(round(circle_radius_len, 4), ang_1km_rad, dist_temp))
+                distance += dist_temp
+                arc_dist += dist_temp
+            else:
+                ang_rest = abs(arc_rad_len) - (n_1km_steps - 1) * ang_1km_rad
+                rest_dist = float((ang_rest / (2 * np.pi)) * 2 * np.pi * circle_radius_len)
+                distance += rest_dist
+                arc_dist += rest_dist
 
-        ang_rest = abs(arc_rad_len) - n_1km_steps * ang_1km_rad
-        distance += float((ang_rest / (2 * np.pi)) * 2 * np.pi * circle_radius_len)
+                db_arc_dist = float(2 * sp.pi * float(arc_desc['circle_radius_len']) * (abs(float(arc_desc['arc_rad_len'] / (2 * sp.pi)))))
+                # print('** ** ang_rest: {}, rest_dist: {}, ad: {}, db: {}'.format(ang_rest, rest_dist, arc_dist, db_arc_dist))
+                print('Discretized arc, dist:', arc_dist)
 
         return distance, points
-
-
-
-
-
-
-
-
-
 
 
 class Population:
