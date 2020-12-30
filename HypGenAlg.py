@@ -10,11 +10,11 @@ import math
 
 """ Genetic Algorithm parameters """
 CHROMOSOME_SIZE = 5
-GENERATIONS_NUM = 10
+GENERATIONS_NUM = 30
 
-NEWPOP_BEST_PARENTS_NUM = 3
-NEWPOP_CHILDREN_NUM = 5
-NEWPOP_RANDOM_NUM = 2
+NEWPOP_BEST_PARENTS_NUM = 9
+NEWPOP_CHILDREN_NUM = 15
+NEWPOP_RANDOM_NUM = 6
 
 POPULATION_SIZE = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM + NEWPOP_RANDOM_NUM
 
@@ -389,10 +389,10 @@ class Individual:
                 y = Y_MAX_ALLOWED
 
             z_orig_vals.append(get_axis_z_value(z_data=Z_DATA_FIL,
-                                                    x_coordinate=x,
-                                                    y_coordinate=y,
-                                                    x_req=X_DATA_FIL,
-                                                    y_req=Y_DATA_FIL))
+                                                x_coordinate=x,
+                                                y_coordinate=y,
+                                                x_req=X_DATA_FIL,
+                                                y_req=Y_DATA_FIL))
 
         return z_orig_vals
 
@@ -505,7 +505,7 @@ class Population:
     def __init__(self, pop_size=POPULATION_SIZE) -> None:
         self.individuals = np.array([Individual() for i in range(pop_size)])
 
-    def initialize_random(self) -> None:
+    def initialize_random(self, curr_pop_crcs: Union[Tuple[List, List], None] = None) -> None:
         """
         Initialize Individuals with random values
         Params:                                                                     type:
@@ -514,9 +514,32 @@ class Population:
         print('Population: started random initialization')
         """ Get invalid coordinates so Genotype can check if drawn point is correct """
 
-        for individual in self.individuals:
+        for (individual, ind_id) in zip(self.individuals, range((len(self.individuals)))):
             print('Population: initialize Indywidual {}'.format((list(self.individuals)).index(individual)))
-            individual.initialize_random()
+            while True:
+                individual.initialize_random()
+
+                """ Check if individual CRC is unique in context of this Population """
+                if individual.genotype.checksum_h not in \
+                        [ind.genotype.checksum_h for ind in self.individuals[:ind_id]] and \
+                        individual.genotype.checksum_v not in \
+                        [ind.genotype.checksum_v for ind in self.individuals[:ind_id]]:
+
+                    """ If yes then check if is unique in context of super population - if exist """
+                    if curr_pop_crcs is not None:
+                        spr_pop_crcs_h, spr_pop_crcs_v = curr_pop_crcs
+                        if individual.genotype.checksum_h not in spr_pop_crcs_h and \
+                                individual.genotype.checksum_v not in spr_pop_crcs_v:
+                            """ Inidividual is globally unique - init next individual """
+                            break
+                        else:
+                            print('***Population: At least one of CRCs exists in SUPER population, retry random init')
+                    else:
+                        """ No super population - individual is unique """
+                        break
+                else:
+                    print('***Population: At least one of CRCs exists in THIS population, retry random init')
+
         print('Population: ended random initialization')
 
         print_population_info('Random initialization', pop=self.individuals)
@@ -544,7 +567,13 @@ class Population:
 
         """ create random 20% individuals """
         random_pop = Population(pop_size=NEWPOP_RANDOM_NUM)
-        random_pop.initialize_random()
+
+        """ Get current offspring CRCs to make sure created randomly are not the same """
+        offspr_crcs_h = [ind.genotype.checksum_h for ind in offspring]
+        offspr_crcs_v = [ind.genotype.checksum_v for ind in offspring]
+
+        random_pop.initialize_random(curr_pop_crcs=(offspr_crcs_h, offspr_crcs_v))
+
         offspring[NEWPOP_RANDOM_START:NEWPOP_RANDOM_START + NEWPOP_RANDOM_NUM] = deepcopy(random_pop.individuals)
 
         """ Set new population """
@@ -554,19 +583,31 @@ class Population:
 
         print_population_info(title='New population', pop=self.individuals)
 
+        # debug
+        pop_crcs_h = [ind.genotype.checksum_h for ind in self.individuals]
+        pop_crcs_v = [ind.genotype.checksum_v for ind in self.individuals]
+        if len(pop_crcs_h) == len(set(pop_crcs_h)):
+            """ ok """
+            pass
+        else:
+            raise RuntimeError('H CRCs not unique!: {}'.format(pop_crcs_h))
+        if len(pop_crcs_v) == len(set(pop_crcs_v)):
+            """ ok """
+            pass
+        else:
+            raise RuntimeError('V CRCs not unique!: {}'.format(pop_crcs_v))
+        # end debug
+
         print('...FINISHED CREATION OF NEW GENERATION')
 
     def __get_best_individuals_sorted(self) -> np.array:
         individuals = deepcopy(self.individuals)
         costs_desc = deepcopy([{'index': index, 'cost': individual.fenotype.fitness_val} for
                               (index, individual) in zip(range(len(individuals)), individuals)])
-        # print([item['cost'] for item in costs_desc])
 
         sorted_indexes = [index for (cost, index) in sorted(zip([item['cost'] for item in costs_desc],
                                                                 [item['index'] for item in costs_desc]))]
 
-        # self.individuals = np.array([self.individuals[index] for index in sorted_indexes])
-        # print(sorted([item['cost'] for item in costs_desc]))
         return np.array([individuals[index] for index in sorted_indexes])
 
     def get_best_individual(self) -> Individual:
@@ -686,7 +727,9 @@ class Population:
                     crc_v_child = child.genotype.init_checksum(plane=Plane.VERTICAL)
 
                     if ((crc_h_child not in [ind.genotype.checksum_h for ind in parents] and
-                         (crc_v_child not in [ind.genotype.checksum_v for ind in parents]))):
+                         (crc_v_child not in [ind.genotype.checksum_v for ind in parents])) and
+                            (crc_h_child not in [ind.genotype.checksum_h for ind in children[:child_id]]) and
+                            (crc_v_child not in [ind.genotype.checksum_v for ind in children[:child_id]])):
 
                         """ Initialize individual fenotype and check if is valid """
                         individual_valid = child.init_fenotype_is_valid()
