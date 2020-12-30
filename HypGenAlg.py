@@ -26,6 +26,7 @@ ROUTE_RESOLUTION = 1000
 MATING_POINTS_MAX = 100
 
 X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL = np.inf, np.inf, np.inf
+X_DATA_INV, Y_DATA_INV = np.inf, np.inf
 
 
 class Gen:
@@ -43,11 +44,11 @@ class Chromosome:
 
     def init_tangent_rand(self):
         if self.plane == Plane.HORIZONTAL:
-            """ Initialize tangent in first point (for horizontal drawn from range (0, pi/2)) """
-            self.gen_init_tangent = sp.pi/2 * np.random.sample()
+            """ Initialize tangent in first point (for horizontal drawn from range (ANGLE_MIN_H, ANGLE_MAX_H) """
+            self.gen_init_tangent = (ANGLE_MAX_H - ANGLE_MIN_H) * np.random.sample() + ANGLE_MIN_H
         elif self.plane == Plane.VERTICAL:
-            """ Initialize tangent in first point (for horizontal drawn from range (-pi/8, pi/8)) """
-            self.gen_init_tangent = sp.pi/4 * np.random.sample() - sp.pi/8
+            """ Initialize tangent in first point (for horizontal drawn from range (ANGLE_MIN_V, ANGLE_MAX_V)) """
+            self.gen_init_tangent = (ANGLE_MAX_V - ANGLE_MIN_V) * np.random.sample() + ANGLE_MIN_V
         else:
             raise ValueError('Invalid plane parameter value! {}'.format(self.plane))
 
@@ -60,7 +61,7 @@ class Genotype:
         self.chromosome_v = Chromosome(plane=Plane.VERTICAL)
         self.checksum_v = np.inf
 
-    def init_horizontal(self, invalid_coordinates: Tuple[List[int], List[int]]) -> None:
+    def init_horizontal_random(self) -> None:
         """
         Initialize Gens (Points) for hotizontal movement
         Params:                                                                     type:
@@ -77,13 +78,16 @@ class Genotype:
         """ Draw intermediate points coordinates """
         for gen_id in range(1, CHROMOSOME_SIZE - 1):
             while True:
-                x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
-                                                             MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
-                y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
-                                                             MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
+                # x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
+                #                                              MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
+                # y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
+                #                                              MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
+
+                x_drawn = np.random.choice([i for i in range(X_KRK, X_WAW)], 1)[0]
+                y_drawn = np.random.choice([i for i in range(Y_KRK, Y_WAW)], 1)[0]
 
                 """ Check if selected point has proper z value (not np.inf) """
-                if is_point_valid(x_drawn=x_drawn, y_drawn=y_drawn, invalid_coordinates=invalid_coordinates):
+                if is_point_valid(x=x_drawn, y=y_drawn):
                     gens[gen_id].point['x'] = x_drawn
                     gens[gen_id].point['y'] = y_drawn
                     break
@@ -107,7 +111,7 @@ class Genotype:
         """ Calculate checksum based on points and tangent """
         self.init_checksum(plane=Plane.HORIZONTAL)
 
-    def init_vertical(self) -> None:
+    def init_vertical_random(self) -> None:
         """
         Initialize Gens (Points) for vertical movement
         Params:                                                                     type:
@@ -124,10 +128,17 @@ class Genotype:
         """ Draw intermediate points coordinates; z - height in adequate point d,
                                                   d - point in route len divided for 1000 equal segemnts """
         z_drawns = np.random.choice([i for i in range(ROUTE_MIN_HIGHT, ROUTE_MAX_HIGHT)], CHROMOSOME_SIZE - 2)
-        d_drawns = np.random.choice(ROUTE_RESOLUTION, CHROMOSOME_SIZE - 2)
 
-        """ Check if d values are unique """
-        # TODO - check if d values are unique
+        """ Make sure d values are unique """
+        while True:
+            d_drawns = np.random.choice(ROUTE_RESOLUTION, CHROMOSOME_SIZE - 2)
+
+            if len(d_drawns) == len(set(d_drawns)):
+                """" d values are unique - ok """
+                break
+            else:
+                """ d values are not unique, draw another collection """
+                pass
 
         """ Sort values by growing distance d """
         df_vert = pd.DataFrame({'z': z_drawns, 'd': d_drawns})
@@ -138,7 +149,7 @@ class Genotype:
             gens[gen_id].point['z'] = df_vert['z'][gen_id - 1]
             gens[gen_id].point['d'] = df_vert['d'][gen_id - 1]
 
-        """ Initialize tangent in first point (for vertical drawn from range (-pi/8, pi/8))"""
+        """ Initialize tangent in first point """
         self.chromosome_v.init_tangent_rand()
 
         """ Calculate checksum based on points and tangent """
@@ -219,8 +230,8 @@ class Fenotype:
         self.route_len_total = route_len
         self.route_desc_v = route_desc
 
-        # if PLOT_INIT:
-        # plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
+        if PLOT_INIT:
+            plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
 
     def get_route_desc(self, plane: Plane):
         if plane == Plane.HORIZONTAL:
@@ -235,87 +246,116 @@ class Individual:
     def __init__(self):
         self.genotype = Genotype()
         self.fenotype = Fenotype()
+        self.discete_route_h_points = None
 
-    def initialize_random(self, invalid_coordinates: Tuple[List[int], List[int]]) -> None:
-        self.genotype.init_horizontal(invalid_coordinates=invalid_coordinates)
+    def init_fenotype_is_valid(self) -> bool:
+        """ Assumed genotypes both h and v are already initialized at this point
+            In here only initialize fenotypes and check if Individual is valid """
+
         self.fenotype.init_horizontal(p_dicts=self.genotype.get_points_descs(plane=Plane.HORIZONTAL),
                                       init_tangent=self.genotype.chromosome_h.gen_init_tangent)
+        disc_route_ret = self.dicretize_route()
 
-        self.genotype.init_vertical()
+        """ Check if all discrete route points are in known region """
+        if disc_route_ret is not None:
+            """ Route points are in known region - ok """
+            self.discete_route_h_points = disc_route_ret
+        else:
+            """ Route points not in region - return False """
+            print('- ' * 8 + 'Individual: Route in unknown region, Individual invalid!')
+            return False
+
         self.fenotype.init_vertical(p_dicts=self.map_genotype_v_to_p_dicts(),
                                     init_tangent=self.genotype.chromosome_v.gen_init_tangent)
 
-        self.fitness()
+        for arc_desc in self.fenotype.route_desc_v:
+            if arc_desc['arc_rad_len'] > np.pi:
+                print('- ' * 8 + 'Individual: arc angle too big: {}, Individual invalid!'
+                      .format(np.degrees(float(arc_desc['arc_rad_len']))))
+                """ Free discrete points as they are not needed any longer and only occupy RAM """
+                self.discete_route_h_points = None
+                return False
+
+        """ If fenotype is ok then calculate fitness """
+        print('. ' * 8 + 'Individual: Fenotype ok, calculate fitness')
+        self.calculate_fitness()
+
+        """ Free discrete points as they are not needed any longer and only occupy RAM """
+        self.discete_route_h_points = None
+        return True
+
+    def initialize_random(self) -> None:
+        while True:
+            self.genotype.init_horizontal_random()
+            self.genotype.init_vertical_random()
+            individual_valid = self.init_fenotype_is_valid()
+
+            if individual_valid is True:
+                print('. ' * 8 + 'Individual: Initialization was successfull')
+                break
+            else:
+                print('- ' * 8 + 'Individual: Initialization was not successfull, retry')
 
     def map_genotype_v_to_p_dicts(self) -> List[Dict[str, int]]:
         points_v = deepcopy(self.genotype.get_points_descs(plane=Plane.VERTICAL))
         route_len_h = copy(self.fenotype.route_len_h)
         return [{'z': point['z'], 'd': math.floor(point['d'] / ROUTE_RESOLUTION * route_len_h)} for point in points_v]
 
-    def fitness(self) -> float:
-        """ Check if route is not too long - if it is then it does not make sense to calculate cost """
-        # print('----- 0')
-        if self.fenotype.route_len_total < DIST1000KM:
-            """ Dicretize route """
-            route_points = self.dicretize_route()
-            # print('----- 1')
-            """ Further cost calculations makes sense only if route does not exceed region under analysis """
-            if self.is_route_in_region(route_points=route_points) is True:
-                # print('----- 2')
-                """ Get vector of hight points from generatd route """
-                gen_route_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
-                # print('----- 3')
-                if gen_route_z_vals is not None:
-                    """ Get vector of hight points from landform """
-                    gen_z_vals = [elem['z'] for elem in gen_route_z_vals]
-                    orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
-                    # print('----- 4')
-                    if orig_landform_z_vals is not None:
-                        if len(gen_route_z_vals) != len(orig_landform_z_vals):
-                            raise ValueError('Len of arrays must be equal!')
-                        # landform points must be valid here - all necessary conditions checked before
+    def calculate_fitness(self) -> None:
 
-                        """ Create vector of hight differences """
-                        diff_vector_z = [gen_z_vals[i] - orig_landform_z_vals[i] for i in range(len(gen_z_vals))]
-                        # print('----- 5')
+        """ Take dicretized route """
+        route_points = self.discete_route_h_points
 
-                        # debug
-                        # import matplotlib.pyplot as plt
-                        # plt.plot(range(len(diff_vector_z)), diff_vector_z)
-                        # plt.grid()
-                        # plt.show()
-                        # end debug
+        """ Get vector of hight points from generatd route """
+        gen_z_vals = self.get_gen_route_hights(route_points=route_points, route_v_descs=self.fenotype.route_desc_v)
 
-                        # return self.calculate_route_cost(diff_vector_z=diff_vector_z)
-                        self.fenotype.fitness_val = self.fenotype.route_len_total
-                        return self.fenotype.route_len_total
-                    else:
-                        """ Route crosses not known region - add penalty """
-                        print('*** Penalty: PENALTY_NOTKNOWNREGION')
-                        # return PENALTY_NOTKNOWNREGION
-                else:
-                    """ Invalid invalid due to points sequence or spiral - apply penalty cost """
-                    print('*** Penalty: PENALTY_SEQORSPIRAL')
-                    # return PENALTY_SEQORSPIRAL
+        """ Get vector of hight points from landform """
+        orig_landform_z_vals = self.get_landform_route_heights(route_points=route_points)
+
+        if len(gen_z_vals) != len(orig_landform_z_vals):
+            raise ValueError('Len of arrays must be equal!')
+
+        """ Create vector of hight differences """
+        diff_vector_z = [gen_z_vals[i] - orig_landform_z_vals[i] for i in range(len(gen_z_vals))]
+
+        # debug
+        # import matplotlib.pyplot as plt
+        # plt.plot(range(len(diff_vector_z)), diff_vector_z)
+        # plt.grid()
+        # plt.show()
+        # end debug
+
+        cost = self.calculate_route_cost(diff_vector_z=diff_vector_z)
+
+        print('. ' * 8 + 'Individual: Calculated route cost:', format(cost))
+
+        self.fenotype.fitness_val = cost
+
+    def calculate_route_cost(self, diff_vector_z: List[float]) -> int:
+        cost = 0
+        for diff in diff_vector_z:
+            if -1 <= diff <= 1:
+                """ on ground """
+                cost += 15
+            elif -10 <= diff < -1:
+                """ excavation """
+                cost += 17
+            elif diff < -10:
+                """ tunnel """
+                cost += 31
+            elif 1 < diff <= 10:
+                """ embankment """
+                cost += 18
+            elif diff > 10:
+                """ pylon """
+                cost += int(0.7 * diff ** 2)
             else:
-                """ Route not in region - apply penalty cost """
-                print('*** Penalty: PENALTY_OUTOFREGION')
-                # return PENALTY_OUTOFREGION
-        else:
-            """ Route too long - apply penalty cost """
-            print('*** Penalty: PENALTY_ROUTETOOLONG')
-            # return PENALTY_ROUTETOOLONG
-        # print('----- 6')
-        self.fenotype.fitness_val = self.fenotype.route_len_total
-        return self.fenotype.route_len_total
-        # # TODO - route len as a cost only temporarly !!!
-        # return self.fenotype.route_len_h
+                print(diff)
+                raise ValueError
+        return cost
 
-    def calculate_route_cost(self, diff_vector_z: List[float]) -> float:
-        pass
 
     def is_route_in_region(self, route_points: List[Dict[str, Union[int, float]]]) -> bool:
-        x_inv, y_inv = read_invalid_data()
         x_collection = [elem['x'] for elem in route_points]
         y_collection = [elem['y'] for elem in route_points]
         x_min = min(x_collection)
@@ -324,31 +364,17 @@ class Individual:
         y_max = max(y_collection)
 
         if (x_min >= X_MIN_ALLOWED and x_max <= X_MAX_ALLOWED and y_min >= Y_MIN_ALLOWED and y_max <= Y_MAX_ALLOWED and
-            is_point_valid(x_drawn=x_min, y_drawn=y_min, invalid_coordinates=(x_inv, y_inv)) and
-            is_point_valid(x_drawn=x_min, y_drawn=y_max, invalid_coordinates=(x_inv, y_inv)) and
-            is_point_valid(x_drawn=x_max, y_drawn=y_max, invalid_coordinates=(x_inv, y_inv)) and
-            is_point_valid(x_drawn=x_max, y_drawn=y_min, invalid_coordinates=(x_inv, y_inv))):
+            is_point_valid(x=x_min, y=y_min) and
+            is_point_valid(x=x_min, y=y_max) and
+            is_point_valid(x=x_max, y=y_max) and
+            is_point_valid(x=x_max, y=y_min)):
             return True
         else:
             return False
 
-        # for point in route_points:
-        #     if X_MIN_ALLOWED <= point['x'] <= X_MAX_ALLOWED and Y_MIN_ALLOWED <= point['y'] <= Y_MAX_ALLOWED:
-        #         if not is_point_valid(x_drawn=point['x'], y_drawn=point['y'], invalid_coordinates=(x_inv, y_inv)):
-        #             print('point invalid')
-        #             return False
-        #     else:
-        #         print('point out of range')
-        #         return False
-        # return True
-
-
-
-
-
-    def get_landform_route_heights(self, route_points: List[Dict[str, Union[int, float]]]) ->\
-            Union[List[float], None]:
+    def get_landform_route_heights(self, route_points: List[Dict[str, Union[int, float]]]) -> List[float]:
         z_orig_vals = []
+
         for point in route_points:
             x, y = round(point['x'], -3), round(point['y'], -3)
 
@@ -367,28 +393,11 @@ class Individual:
                                                     y_coordinate=y,
                                                     x_req=X_DATA_FIL,
                                                     y_req=Y_DATA_FIL))
-        # print('>>>', z_orig_vals)
+
         return z_orig_vals
 
-
     def get_gen_route_hights(self, route_points: List[Dict[str, Union[int, float]]], route_v_descs: List[Dict[str, Any]]) ->\
-            Union[List[Dict[str, float]], None]:
-        # return None if invalid, points order is not ascending or arc angle bigger than pi
-        # - then fitness function know to add penalty cost
-
-        """ Check points order - must be ascending """
-        d_points_raw = [d_elem['d'] for d_elem in self.genotype.get_points_descs(plane=Plane.VERTICAL)]
-
-        if sorted(d_points_raw) != d_points_raw:
-            print('***++ Invalid points order!')
-            return None
-
-        """ Check if there are arc angles bigger than pi - if yes then route is invalid """
-        arc_rad_lens = [float(d_elem['arc_rad_len']) for d_elem in self.fenotype.route_desc_v]
-        for rad_len in arc_rad_lens:
-            if rad_len > np.pi:
-                print('***++ Rad len bigger than pi!')
-                return None
+            List[float]:
 
         """ Evaluate common points of fallowing arcs """
         d_points_mapped = [d_elem['d'] for d_elem in self.map_genotype_v_to_p_dicts()]
@@ -423,7 +432,7 @@ class Individual:
                           route_len=self.fenotype.route_len_total,
                           p_dicts=generated_route_z_values)
 
-        return generated_route_z_values
+        return [elem['z'] for elem in generated_route_z_values]
 
     def get_gen_disc_point_hight(self, arc_desc: Dict[str, Any], d_point: float):
         d_center, z_center = arc_desc['point_cR'].coordinates
@@ -433,9 +442,9 @@ class Individual:
         if direction == ArcDirection.ANTICLOCKWISE:
             alpha += np.pi
 
-        return arc_desc['circle_radius_len'] * np.sin(alpha) + z_center
+        return np.int(arc_desc['circle_radius_len'] * np.sin(alpha) + z_center)
 
-    def dicretize_route(self) -> List[Dict[str, Union[int, float]]]:
+    def dicretize_route(self) -> Union[List[Dict[str, Union[int, float]]], None]:
         curr_distance = 0.0
         dicrete_route_points = []
 
@@ -445,15 +454,14 @@ class Individual:
 
         dicrete_route_points.append({'x': X_WAW, 'y': Y_WAW, 'd': math.floor(self.fenotype.route_len_h)})
 
-        if PLOT_FITNESS:
-            plot_route_2d(plane=Plane.HORIZONTAL,
-                          route_desc=self.fenotype.route_desc_h,
-                          route_len=self.fenotype.route_len_h,
-                          p_dicts=dicrete_route_points)
+        in_region = self.is_route_in_region(route_points=dicrete_route_points)
 
-        return dicrete_route_points
+        if in_region is True:
+            return dicrete_route_points
+        else:
+            return None
 
-    def discretize_arc(self, arc_desc: Dict[str, Any], curr_dist: float):
+    def discretize_arc(self, arc_desc: Dict[str, Any], curr_dist: float) -> Tuple[float, List]:
         arc_rad_len = float(arc_desc['arc_rad_len'])
         circle_radius_len = float(arc_desc['circle_radius_len'])
         direction = ArcDirection.ANTICLOCKWISE if arc_rad_len >= 0 else ArcDirection.CLOCKWISE
@@ -468,8 +476,6 @@ class Individual:
 
         n_1km_steps = math.ceil(abs(arc_rad_len) / ang_1km_rad)
 
-        # print('** ** r: {}, f: {}, s:{}, d: {}, dir: {}'.format(round(circle_radius_len, 4), ang_1km_fraction, n_1km_steps, distance, direction))
-
         for p_id in range(n_1km_steps):
             if direction == ArcDirection.ANTICLOCKWISE:
                 p_angle = base_angle + p_id * ang_1km_rad
@@ -482,8 +488,7 @@ class Individual:
             points.append({'x': x, 'y': y, 'd': distance})
 
             if p_id != n_1km_steps - 1:
-                dist_temp = float((ang_1km_fraction) * 2 * np.pi * circle_radius_len)
-                # print('** ** r: {}, af: {}, len: {}'.format(round(circle_radius_len, 4), ang_1km_rad, dist_temp))
+                dist_temp = float(ang_1km_fraction * 2 * np.pi * circle_radius_len)
                 distance += dist_temp
                 arc_dist += dist_temp
             else:
@@ -491,10 +496,6 @@ class Individual:
                 rest_dist = float((ang_rest / (2 * np.pi)) * 2 * np.pi * circle_radius_len)
                 distance += rest_dist
                 arc_dist += rest_dist
-
-                db_arc_dist = float(2 * sp.pi * float(arc_desc['circle_radius_len']) * (abs(float(arc_desc['arc_rad_len'] / (2 * sp.pi)))))
-                # print('** ** ang_rest: {}, rest_dist: {}, ad: {}, db: {}'.format(ang_rest, rest_dist, arc_dist, db_arc_dist))
-                # print('Discretized arc, dist:', arc_dist)
 
         return distance, points
 
@@ -512,11 +513,10 @@ class Population:
         """
         print('Population: started random initialization')
         """ Get invalid coordinates so Genotype can check if drawn point is correct """
-        x_inv, y_inv = read_invalid_data()
 
         for individual in self.individuals:
             print('Population: initialize Indywidual {}'.format((list(self.individuals)).index(individual)))
-            individual.initialize_random(invalid_coordinates=(x_inv, y_inv))
+            individual.initialize_random()
         print('Population: ended random initialization')
 
         print_population_info('Random initialization', pop=self.individuals)
@@ -536,19 +536,7 @@ class Population:
             deepcopy(best_to_worst_parents[0:NEWPOP_BEST_PARENTS_NUM])
 
         """ use best parents to cross over offspring and generate 50% of them """
-        children = self.__cross_over(parents_sorted=best_to_worst_parents)
-
-        """ Process mutation """
-        children = self.__mutate(children=children)
-
-        for individual in children:
-            individual.fenotype.init_horizontal(p_dicts=individual.genotype.get_points_descs(plane=Plane.HORIZONTAL),
-                                                init_tangent=individual.genotype.chromosome_h.gen_init_tangent)
-
-            individual.fenotype.init_vertical(p_dicts=individual.map_genotype_v_to_p_dicts(),
-                                              init_tangent=individual.genotype.chromosome_v.gen_init_tangent)
-
-            individual.fitness()
+        children = self.__cross_over_mutate(parents_sorted=best_to_worst_parents)
 
         print_population_info(title='Children after crossing over and mutation', pop=children)
 
@@ -584,7 +572,7 @@ class Population:
     def get_best_individual(self) -> Individual:
         return (self.__get_best_individuals_sorted())[0]
 
-    def __cross_over(self, parents_sorted: np.array) -> np.array:
+    def __cross_over_mutate(self, parents_sorted: np.array) -> np.array:
         """ """
         print('\t\t\tStarted cross over...')
         """ Create new empty population - children """
@@ -667,83 +655,111 @@ class Population:
                         deepcopy((parent1.genotype.chromosome_v.gens[i]) if (cross_mask_v[i - 1] == 0)
                                  else (parent2.genotype.chromosome_v.gens[i]))
 
-                child.genotype.chromosome_h.gen_init_tangent = deepcopy(
-                    parent1.genotype.chromosome_h.gen_init_tangent if (tang_mask_h == 0)
-                    else parent2.genotype.chromosome_h.gen_init_tangent)
+                """ Vertical points must be ascending - sort them if they are not """
+                z_vals = [gen.point['z'] for gen in child.genotype.chromosome_v.gens[1:-1]]
+                d_vals = [gen.point['d'] for gen in child.genotype.chromosome_v.gens[1:-1]]
 
-                child.genotype.chromosome_v.gen_init_tangent = deepcopy(
-                    parent1.genotype.chromosome_v.gen_init_tangent if (tang_mask_v == 0)
-                    else parent2.genotype.chromosome_v.gen_init_tangent)
+                """ d values must be unique """
+                if len(d_vals) == len(set(d_vals)):
+                    """" d values are unique - ok """
 
-                """ Check if created individual does not already exist """
-                crc_h_child = child.genotype.init_checksum(plane=Plane.HORIZONTAL)
-                crc_v_child = child.genotype.init_checksum(plane=Plane.VERTICAL)
-                if ((crc_h_child not in [ind.genotype.checksum_h for ind in parents] and
-                     (crc_v_child not in [ind.genotype.checksum_v for ind in parents]))):
-                    """ Add individual to new population """
-                    children[child_id] = deepcopy(child)
-                    print('\t\t\t\tCrossed over child:', child_id)
-                    child_id += 1
+                    df_vert = pd.DataFrame({'z': z_vals, 'd': d_vals})
+                    df_vert = deepcopy(df_vert.sort_values(by=['d'], ignore_index=True))
+                    """ Set intermediate points """
+                    for gen_id in range(1, CHROMOSOME_SIZE - 1):
+                        child.genotype.chromosome_v.gens[gen_id].point['z'] = deepcopy(df_vert['z'][gen_id - 1])
+                        child.genotype.chromosome_v.gens[gen_id].point['d'] = deepcopy(df_vert['d'][gen_id - 1])
 
-                    if child_id == NEWPOP_CHILDREN_NUM:
-                        """ Produced all children, return """
-                        print('\t\t\t...Ended cross over')
-                        return children
+                    child.genotype.chromosome_h.gen_init_tangent = deepcopy(
+                        parent1.genotype.chromosome_h.gen_init_tangent if (tang_mask_h == 0)
+                        else parent2.genotype.chromosome_h.gen_init_tangent)
+
+                    child.genotype.chromosome_v.gen_init_tangent = deepcopy(
+                        parent1.genotype.chromosome_v.gen_init_tangent if (tang_mask_v == 0)
+                        else parent2.genotype.chromosome_v.gen_init_tangent)
+
+                    """ Process mutation """
+                    child = self.__mutate(child=child)
+
+                    """ Check if created individual does not already exist """
+                    crc_h_child = child.genotype.init_checksum(plane=Plane.HORIZONTAL)
+                    crc_v_child = child.genotype.init_checksum(plane=Plane.VERTICAL)
+
+                    if ((crc_h_child not in [ind.genotype.checksum_h for ind in parents] and
+                         (crc_v_child not in [ind.genotype.checksum_v for ind in parents]))):
+
+                        """ Initialize individual fenotype and check if is valid """
+                        individual_valid = child.init_fenotype_is_valid()
+                        if individual_valid is True:
+                            print('. ' * 8 + 'Population: Individual valid, crossing successfull')
+
+                            """ Add individual to new population """
+                            children[child_id] = deepcopy(child)
+                            print('\t\t\t\tChild crossing successfull:', child_id)
+                            child_id += 1
+
+                            if child_id == NEWPOP_CHILDREN_NUM:
+                                """ Produced all children, return """
+                                print('\t\t\t...Ended cross over')
+                                return children
+
+                            else:
+                                """ Not all children produced yet - go to beginning of the loop """
+                                pass
+                        else:
+                            """ Individual invalid - go to beginning of the loop """
+                            print('- ' * 8 + '*** Individual has invalid fenotype, retry crossing procedure')
 
                     else:
-                        """ Not all children produced yet - go to beginning of the loop """
-                        pass
+                        """ Individual already exists in population - go to beginning of the loop """
+                        print('\t\t\t*** Individual with at least one the same CRC already exists in population, draw '
+                              'another parents pair')
                 else:
-                    """ Individual already exists in population - go to beginning of the loop """
-                    print('\t\t\t*** Individual with at least one the same CRC already exists in population, draw '
-                          'another parents pair')
+                    """ Invalid d values collection, try again """
+                    print('\t\t\t*** Invalid d values collection, try again')
             else:
                 """ Invalid parents drawing - go to beginning of the loop """
                 print('\t\t\t*** Parents has at least one same CRC, draw another parents pair')
 
-    def __mutate(self, children: np.array) -> np.array:
+    def __mutate(self, child: np.array) -> np.array:
         """ Generate mask indicating which children will be affected by mutation """
-        mutate_mask = np.random.choice(10, len(children))
+        mutate_mask = np.random.choice(10, 1)[0]
 
-        for (mask_elem, child) in zip(mutate_mask, children):
-            """ Drawning 0 is 10% chance - mutations probability """
-            if mask_elem == 0:
-                """ Draw which gen will be affected """
+        """ Drawning 0 is 10% chance - mutations probability """
+        if mutate_mask == 0:
+            """ Draw which gen will be affected """
 
-                mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
+            mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
 
-                """ Draw new point and replace """
-                x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
-                                                             MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
-                y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
-                                                             MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
+            """ Draw new point and replace """
+            x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
+                                                         MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
+            y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
+                                                         MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
 
-                print('\t\t\tMutation will be applied: {} by {} on place {}'.format([(gen.point['x'], gen.point['y'])for gen in
-                                                                                     child.genotype.chromosome_h.gens],
-                                                                                    (x_drawn, y_drawn), mut_gen_id))
+            print('\t\t\tMutation will be applied: {} by {} on place {}'.format([(gen.point['x'], gen.point['y'])for gen in
+                                                                                 child.genotype.chromosome_h.gens],
+                                                                                (x_drawn, y_drawn), mut_gen_id))
 
-                child.genotype.chromosome_h.gens[mut_gen_id].point['x'] = x_drawn
-                child.genotype.chromosome_h.gens[mut_gen_id].point['y'] = y_drawn
+            child.genotype.chromosome_h.gens[mut_gen_id].point['x'] = x_drawn
+            child.genotype.chromosome_h.gens[mut_gen_id].point['y'] = y_drawn
 
-            else:
-                """ Children is not about to be mutated, just pass """
-                pass
+        else:
+            """ Children is not about to be mutated, just pass """
+            pass
 
-        return children
-
+        return child
 
 
-def is_point_valid(x_drawn: int, y_drawn: int, invalid_coordinates: Tuple[List[int], List[int]]) -> bool:
+def is_point_valid(x: int, y: int) -> bool:
     """
     Check if drawn coordinates are in map range and if corrensponding z value in not np.inf
     Params:                                                                     type:
-    :param x_drawn: Drawn x coordinate                                          int
-    :param y_drawn: Drawn y coordinate                                          int
-    :param invalid_coordinates:
+    :param x: Drawn x coordinate                                                int
+    :param y: Drawn y coordinate                                                int
     :return: True if drawn point is in map range, else False                    bool
     """
-    x_inv, y_inv = invalid_coordinates
-    if x_drawn in x_inv and y_drawn in y_inv:
+    if x in X_DATA_INV and y in Y_DATA_INV:
         return False
     else:
         return True
@@ -788,6 +804,9 @@ class GAModel:
     def __init__(self):
         global X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL
         X_DATA_FIL, Y_DATA_FIL, Z_DATA_FIL = read_filtered_data()
+        global X_DATA_INV, Y_DATA_INV
+        X_DATA_INV, Y_DATA_INV = read_invalid_data()
+
         self.population = Population(pop_size=POPULATION_SIZE)
         self.population.initialize_random()
         best_ind = self.population.get_best_individual()

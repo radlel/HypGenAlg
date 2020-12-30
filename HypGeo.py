@@ -211,7 +211,7 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
         elif point == p_dicts[-1]:
             ax.text(x, y, 'WAW', color='black')
         else:
-            # ax.text(x, y, str(p_dicts.index(point)), color='black')
+            ax.text(x, y, str(p_dicts.index(point)), color='black')
             pass
 
     ax.grid()

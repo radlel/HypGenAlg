@@ -27,8 +27,8 @@ DIST100KM = 100000
 DIST1000KM = 1000000
 
 """ Definitions of min and max route vertical level """
-ROUTE_MIN_HIGHT = -500
-ROUTE_MAX_HIGHT = 3000
+ROUTE_MIN_HIGHT = 0
+ROUTE_MAX_HIGHT = 500
 
 """ Definition of start and end point """
 START_POINT = {
@@ -43,16 +43,16 @@ END_POINT = {
     'z': Z_WAW
 }
 
-PENALTY_ROUTETOOLONG = 100000
-PENALTY_OUTOFREGION = 100000
-PENALTY_SEQORSPIRAL = 100000
-PENALTY_NOTKNOWNREGION = 100000
+ANGLE_MIN_H = 1 / 12 * np.pi
+ANGLE_MAX_H = 5 / 12 * np.pi
+ANGLE_MIN_V = - 1 / 16 * np.pi
+ANGLE_MAX_V = 1 / 16 * np.pi
 
 
 """ Definitions for plotting """
 PLOT_INIT = False
 PLOT_FITNESS = False
-# PLOT_INIT = True
+
 
 """ Definition of map borders """
 MAP_AREA_SIZE = 343 * DIST1KM
