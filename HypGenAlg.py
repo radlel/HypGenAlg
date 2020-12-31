@@ -10,11 +10,11 @@ import math
 
 """ Genetic Algorithm parameters """
 CHROMOSOME_SIZE = 5
-GENERATIONS_NUM = 30
+GENERATIONS_NUM = 50
 
-NEWPOP_BEST_PARENTS_NUM = 9
-NEWPOP_CHILDREN_NUM = 15
-NEWPOP_RANDOM_NUM = 6
+NEWPOP_BEST_PARENTS_NUM = 12
+NEWPOP_CHILDREN_NUM = 20
+NEWPOP_RANDOM_NUM = 8
 
 POPULATION_SIZE = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM + NEWPOP_RANDOM_NUM
 
@@ -765,7 +765,8 @@ class Population:
                 print('\t\t\t*** Parents has at least one same CRC, draw another parents pair')
 
     def __mutate(self, child: np.array) -> np.array:
-        """ Generate mask indicating which children will be affected by mutation """
+
+        """ Horizontal mutation """
         mutate_mask = np.random.choice(10, 1)[0]
 
         """ Drawning 0 is 10% chance - mutations probability """
@@ -775,20 +776,68 @@ class Population:
             mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
 
             """ Draw new point and replace """
-            x_drawn = np.random.choice([i for i in range(MAP_LIMIT['xmin'] + DIST10KM,
-                                                         MAP_LIMIT['xmax'] - DIST10KM)], 1)[0]
-            y_drawn = np.random.choice([i for i in range(MAP_LIMIT['ymin'] + DIST10KM,
-                                                         MAP_LIMIT['ymax'] - DIST10KM)], 1)[0]
+            x_drawn = np.random.choice([i for i in range(X_KRK, X_WAW)], 1)[0]
+            y_drawn = np.random.choice([i for i in range(Y_KRK, Y_WAW)], 1)[0]
 
-            print('\t\t\tMutation will be applied: {} by {} on place {}'.format([(gen.point['x'], gen.point['y'])for gen in
-                                                                                 child.genotype.chromosome_h.gens],
-                                                                                (x_drawn, y_drawn), mut_gen_id))
+            print('\t\t\tMutation will be applied for HORIZONTAL: {} by {} on place {}'
+                  .format([(gen.point['x'], gen.point['y'])for gen in child.genotype.chromosome_h.gens],
+                          (x_drawn, y_drawn), mut_gen_id))
 
             child.genotype.chromosome_h.gens[mut_gen_id].point['x'] = x_drawn
             child.genotype.chromosome_h.gens[mut_gen_id].point['y'] = y_drawn
 
         else:
-            """ Children is not about to be mutated, just pass """
+            """ Children is not about to be mutated in horizontal, just pass """
+            pass
+
+        """ Vertical mutation """
+        mutate_mask = np.random.choice(10, 1)[0]
+        """ Drawning 0 is 10% chance - mutations probability """
+        if mutate_mask == 0:
+            """ Draw which gen will be affected """
+
+            mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
+
+            """ Draw new z value and replace """
+            z_drawn = np.random.choice([i for i in range(ROUTE_MIN_HIGHT, ROUTE_MAX_HIGHT)], 1)[0]
+
+            print('\t\t\tMutation will be applied for VERTICAL: {} by {} on place {}'
+                  .format([gen.point['z'] for gen in child.genotype.chromosome_v.gens],
+                          z_drawn, mut_gen_id))
+
+            child.genotype.chromosome_v.gens[mut_gen_id].point['z'] = z_drawn
+        else:
+            """ Children is not about to be mutated in vertical, just pass """
+            pass
+
+        """ Tangent angle h mutation """
+        mutate_mask = np.random.choice(10, 1)[0]
+        """ Drawning 0 is 10% chance - mutations probability """
+        if mutate_mask == 0:
+
+            """ Draw new angle value and replace """
+            child.genotype.chromosome_h.init_tangent_rand()
+
+            print('\t\t\tMutation will be applied for ANGLE H: {}'
+                  .format(child.genotype.chromosome_h.gen_init_tangent))
+
+        else:
+            """ Children is not about to be mutated in angle h, just pass """
+            pass
+
+        """ Tangent angle v mutation """
+        mutate_mask = np.random.choice(10, 1)[0]
+        """ Drawning 0 is 10% chance - mutations probability """
+        if mutate_mask == 0:
+
+            """ Draw new angle value and replace """
+            child.genotype.chromosome_v.init_tangent_rand()
+
+            print('\t\t\tMutation will be applied for ANGLE V: {}'
+                  .format(child.genotype.chromosome_v.gen_init_tangent))
+
+        else:
+            """ Children is not about to be mutated in angle v, just pass """
             pass
 
         return child
