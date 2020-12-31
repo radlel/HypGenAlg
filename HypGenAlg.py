@@ -10,11 +10,11 @@ import math
 
 """ Genetic Algorithm parameters """
 CHROMOSOME_SIZE = 5
-GENERATIONS_NUM = 50
+GENERATIONS_NUM = 10
 
-NEWPOP_BEST_PARENTS_NUM = 12
-NEWPOP_CHILDREN_NUM = 20
-NEWPOP_RANDOM_NUM = 8
+NEWPOP_BEST_PARENTS_NUM = 6
+NEWPOP_CHILDREN_NUM = 15
+NEWPOP_RANDOM_NUM = 9
 
 POPULATION_SIZE = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM + NEWPOP_RANDOM_NUM
 
@@ -332,26 +332,35 @@ class Individual:
         self.fenotype.fitness_val = cost
 
     def calculate_route_cost(self, diff_vector_z: List[float]) -> int:
+        COST_TUBE = 27
+        COST_TUNNEL_BASE = 26
+        COST_PYLON_PARAM = 0.094
+        COST_EXC = 2
+        COST_EMB = 2
         cost = 0
         for diff in diff_vector_z:
-            if -1 <= diff <= 1:
+            if -5 <= diff <= 5:
                 """ on ground """
-                cost += 15
-            elif -10 <= diff < -1:
+                cost += COST_TUBE
+            elif -10 <= diff < -5:
                 """ excavation """
-                cost += 17
+                cost += COST_TUBE + COST_EXC
             elif diff < -10:
                 """ tunnel """
-                cost += 31
-            elif 1 < diff <= 10:
+                cost += COST_TUBE - COST_TUNNEL_BASE * math.ceil(diff / 50)
+            elif 5 < diff <= 10:
                 """ embankment """
-                cost += 18
+                cost += COST_TUBE + COST_EMB
             elif diff > 10:
                 """ pylon """
-                cost += int(0.7 * diff ** 2)
+                cost += COST_TUBE + COST_PYLON_PARAM * (diff ** 2)
             else:
                 print(diff)
                 raise ValueError
+
+        """ Add mainenance costs in 10 years """
+        cost *= 2
+
         return cost
 
 
@@ -629,9 +638,15 @@ class Population:
             parents_mating_points.append(math.ceil(parents[0].fenotype.fitness_val /
                                                    parents[parent_id].fenotype.fitness_val *
                                                    MATING_POINTS_MAX)
-                                         + (parents_mating_points[parent_id -1] if parent_id > 0 else 0))
+                                         + (parents_mating_points[parent_id - 1] if parent_id > 0 else 0))
+            # print(parent_id)
+            # print(parents_mating_points)
+            # print(math.ceil(parents[0].fenotype.fitness_val / parents[parent_id].fenotype.fitness_val * MATING_POINTS_MAX))
+            # print(parents_mating_points[parent_id - 1])
+            # print(parents[parent_id].fenotype.fitness_val)
+            # print('---')
         mating_points_sum = parents_mating_points[-1]
-        print('\t\t\t\tParents mating points:', parents_mating_points)
+        print('\t\t\t\tParents mating points:', parents_mating_points, 'sum:', mating_points_sum)
 
         """ Process crossing procedure till all children are produced """
         while True:
