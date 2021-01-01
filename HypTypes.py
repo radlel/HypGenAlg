@@ -52,6 +52,17 @@ ANGLE_MAX_V = 1 / 16 * np.pi
 """ Definitions for plotting """
 PLOT_INIT = False
 PLOT_FITNESS = False
+PLOT_SAVE = True
+
+
+PENALTY_TIGHTARC = 100
+PENALTY_INVALIDROUTE = 1000000
+
+COST_TUBE = 27 / 1000
+COST_TUNNEL_BASE = 26 / 1000
+COST_PYLON_PARAM = 0.094 / 1000
+COST_EXC = 1 / 1000
+COST_EMB = 1 / 1000
 
 
 """ Definition of map borders """
@@ -68,6 +79,7 @@ MAP_LIMIT = {
     'dmax': None
 }
 
+MAX_COST = 9999999999999999999999999999999999999999999999999999
 
 class Plane(Enum):
     NONE = 0,

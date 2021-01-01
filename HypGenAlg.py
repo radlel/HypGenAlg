@@ -6,15 +6,25 @@ from HypData import read_invalid_data, read_filtered_data, get_axis_z_value
 import sympy as sp
 import pandas as pd
 import math
+import matplotlib.pyplot as plt
+
+
+import logging
+
+# logging.basicConfig(filename='results.log')
+logging.basicConfig(filename='output\\results.log', filemode='w', format='%(message)s')
+
+individual_unique_id = 0
+route_summary = None
 
 
 """ Genetic Algorithm parameters """
-CHROMOSOME_SIZE = 5
-GENERATIONS_NUM = 10
+CHROMOSOME_SIZE = 6
+GENERATIONS_NUM = 100
 
-NEWPOP_BEST_PARENTS_NUM = 6
-NEWPOP_CHILDREN_NUM = 15
-NEWPOP_RANDOM_NUM = 9
+NEWPOP_BEST_PARENTS_NUM = 30
+NEWPOP_CHILDREN_NUM = 50
+NEWPOP_RANDOM_NUM = 20
 
 POPULATION_SIZE = NEWPOP_BEST_PARENTS_NUM + NEWPOP_CHILDREN_NUM + NEWPOP_RANDOM_NUM
 
@@ -215,7 +225,9 @@ class Fenotype:
         self.route_desc_h = route_desc
 
         if PLOT_INIT:
-            plot_route_2d(plane=Plane.HORIZONTAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
+            global individual_unique_id
+            plot_route_2d(plane=Plane.HORIZONTAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts,
+                          title=str(individual_unique_id) + 'h')
 
     def init_vertical(self, p_dicts: List[Dict[str, int]], init_tangent: float) -> None:
         route_desc, route_len = get_route_description(plane=Plane.VERTICAL, p_dicts=p_dicts, init_tangent=init_tangent)
@@ -231,7 +243,10 @@ class Fenotype:
         self.route_desc_v = route_desc
 
         if PLOT_INIT:
-            plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts)
+            global individual_unique_id
+            plot_route_2d(plane=Plane.VERTICAL, route_desc=route_desc, route_len=route_len, p_dicts=p_dicts,
+                          title=str(individual_unique_id) + 'v')
+            individual_unique_id += 1
 
     def get_route_desc(self, plane: Plane):
         if plane == Plane.HORIZONTAL:
@@ -318,50 +333,108 @@ class Individual:
         """ Create vector of hight differences """
         diff_vector_z = [gen_z_vals[i] - orig_landform_z_vals[i] for i in range(len(gen_z_vals))]
 
-        # debug
-        # import matplotlib.pyplot as plt
-        # plt.plot(range(len(diff_vector_z)), diff_vector_z)
-        # plt.grid()
-        # plt.show()
-        # end debug
+        cost, summary = self.calculate_route_cost(diff_vector_z=diff_vector_z)
 
-        cost = self.calculate_route_cost(diff_vector_z=diff_vector_z)
+        """ Check if arc is not to tight, in case it is add penalty """
+        radius_lens = [int(arc['circle_radius_len']) for arc in self.fenotype.route_desc_h]
+        for radius_len in radius_lens:
+            if radius_len < 23000:
+                print('DEBUG Fitness: Arc to tight, add PENALTY_TIGHTARC, radius:', radius_lens)
+                cost += PENALTY_TIGHTARC
+                break
 
-        print('. ' * 8 + 'Individual: Calculated route cost:', format(cost))
+        print('. ' * 8 + 'Individual: Calculated route cost:', format_fitness(fitness=cost))
 
         self.fenotype.fitness_val = cost
 
-    def calculate_route_cost(self, diff_vector_z: List[float]) -> int:
-        COST_TUBE = 27
-        COST_TUNNEL_BASE = 26
-        COST_PYLON_PARAM = 0.094
-        COST_EXC = 2
-        COST_EMB = 2
+        if PLOT_SAVE:
+            global individual_unique_id
+            plot_route_2d(plane=Plane.HORIZONTAL,
+                          route_desc=self.fenotype.route_desc_h,
+                          route_len=self.fenotype.route_len_h,
+                          p_dicts=self.genotype.get_points_descs(plane=Plane.HORIZONTAL),
+                          title=str(individual_unique_id) + 'h')
+
+            p_dicts = self.map_genotype_v_to_p_dicts()
+            route_desc, route_len = get_route_description(plane=Plane.VERTICAL,
+                                                          p_dicts=p_dicts,
+                                                          init_tangent=self.genotype.chromosome_v.gen_init_tangent)
+
+            d_points_disc = [elem['d'] for elem in route_points]
+            landform = (d_points_disc, orig_landform_z_vals)
+            z_min = min(gen_z_vals)
+            z_max = max(gen_z_vals)
+            plot_route_2d(plane=Plane.VERTICAL,
+                          route_desc=route_desc,
+                          route_len=route_len,
+                          p_dicts=p_dicts,
+                          title=str(individual_unique_id) + 'v',
+                          landform=landform,
+                          z_min=z_min,
+                          z_max=z_max)
+
+
+            logging.warning(str(individual_unique_id) + ' ' +
+                            str(int(cost)) + ' ' +
+                            str(summary) + ' ' +
+                            str(self.fenotype.route_desc_h) + ' ' +
+                            str(self.fenotype.route_desc_v))
+            individual_unique_id += 1
+
+
+
+
+    def calculate_route_cost(self, diff_vector_z: List[float]) -> (int, Dict):
         cost = 0
+        tu, ex, gr, em, py = 0, 0, 0, 0, 0,
+
         for diff in diff_vector_z:
-            if -5 <= diff <= 5:
-                """ on ground """
-                cost += COST_TUBE
-            elif -10 <= diff < -5:
-                """ excavation """
-                cost += COST_TUBE + COST_EXC
-            elif diff < -10:
-                """ tunnel """
-                cost += COST_TUBE - COST_TUNNEL_BASE * math.ceil(diff / 50)
-            elif 5 < diff <= 10:
-                """ embankment """
-                cost += COST_TUBE + COST_EMB
-            elif diff > 10:
-                """ pylon """
-                cost += COST_TUBE + COST_PYLON_PARAM * (diff ** 2)
-            else:
-                print(diff)
-                raise ValueError
+
+            """ Check if point is valid and has no np.inf valid iside """
+            if diff == -np.inf:
+                print('DEBUG Fitness: Invalid route, return PENALTY_INVALIDROUTE, points:', diff_vector_z)
+                return MAX_COST, {'tu': 0, 'ex': 0, 'gr': 0, 'em': 0, 'py': 0}
+
+            try:
+
+                if diff <= -6:
+                    """ tunnel """
+                    cost += COST_TUBE + COST_TUNNEL_BASE * (2 ** math.floor(abs(diff) / 50))
+                    tu += 1
+                elif -6 < diff <= -1:
+                    """ excavation """
+                    cost += COST_TUBE + COST_EXC
+                    ex += 1
+                elif -1 < diff <= 1:
+                    """ on ground """
+                    cost += COST_TUBE
+                    gr += 1
+                elif 1 < diff <= 6:
+                    """ embankment """
+                    cost += COST_TUBE + COST_EMB
+                    em += 1
+                elif diff > 6:
+                    """ pylon """
+                    cost += COST_TUBE + COST_PYLON_PARAM * (diff ** 2)
+                    py += 1
+                else:
+                    print(diff)
+                    raise ValueError
+
+                """ Check if intiger is not about to limit """
+                if cost >= MAX_COST:
+                    print('DEBUG Fitness: Reached MAX COST!')
+                    tu, ex, gr, em, py = 0, 0, 0, 0, 0,
+                    return MAX_COST, {'tu': 0, 'ex': 0, 'gr': 0, 'em': 0, 'py': 0}
+
+            except OverflowError:
+                print('DEBUG OverflowError: int too large to convert to float, return MAX COST')
+                return MAX_COST, {'tu': 0, 'ex': 0, 'gr': 0, 'em': 0, 'py': 0}
 
         """ Add mainenance costs in 10 years """
         cost *= 2
 
-        return cost
+        return cost, {'tu': tu, 'ex': ex, 'gr': gr, 'em': em, 'py': py}
 
 
     def is_route_in_region(self, route_points: List[Dict[str, Union[int, float]]]) -> bool:
@@ -413,7 +486,7 @@ class Individual:
 
         generated_route_z_values = []
 
-        for d_point in [d_elem['d'] for d_elem in route_points]:
+        for d_point in [math.floor(d_elem['d']) for d_elem in route_points]:
             if d_points_mapped[0] <= d_point < d_points_mapped[1]:
                 """ Take first arc for calcultaions """
                 arc_id = 0
@@ -427,6 +500,10 @@ class Individual:
             elif d_points_mapped[3] <= d_point <= d_points_mapped[4]:
                 """ Take fourth arc for calcultaions """
                 arc_id = 3
+            elif d_points_mapped[4] <= d_point <= d_points_mapped[5]:
+                arc_id = 4
+            elif d_points_mapped[5] <= d_point <= d_points_mapped[6]:
+                arc_id = 5
             else:
                 print(d_points_mapped)
                 print(d_point)
@@ -639,12 +716,6 @@ class Population:
                                                    parents[parent_id].fenotype.fitness_val *
                                                    MATING_POINTS_MAX)
                                          + (parents_mating_points[parent_id - 1] if parent_id > 0 else 0))
-            # print(parent_id)
-            # print(parents_mating_points)
-            # print(math.ceil(parents[0].fenotype.fitness_val / parents[parent_id].fenotype.fitness_val * MATING_POINTS_MAX))
-            # print(parents_mating_points[parent_id - 1])
-            # print(parents[parent_id].fenotype.fitness_val)
-            # print('---')
         mating_points_sum = parents_mating_points[-1]
         print('\t\t\t\tParents mating points:', parents_mating_points, 'sum:', mating_points_sum)
 
@@ -808,7 +879,7 @@ class Population:
         """ Vertical mutation """
         mutate_mask = np.random.choice(10, 1)[0]
         """ Drawning 0 is 10% chance - mutations probability """
-        if mutate_mask == 0:
+        if mutate_mask in [0, 1, 2, 3, 4]:
             """ Draw which gen will be affected """
 
             mut_gen_id = (np.random.choice(CHROMOSOME_SIZE - 2, 1))[0] + 1
@@ -903,8 +974,28 @@ def print_population_info(title: str, pop: np.array) -> None:
     for index in range(len(pop)):
         print('\t{}\tH:'.format(i), gens_descs_h[index], '[{:4.2f}]'.format(tangs_h[index]), 'CRC:', crcs_h[index])
         print('\t\tV:', gens_descs_v[index], '[{:4.2f}]'.format(tangs_v[index]), 'CRC:', crcs_v[index])
-        print('\t\tF:', math.floor(pop[index].fenotype.fitness_val) / 1000)
+        print('\t\tF:', format_fitness(fitness=pop[index].fenotype.fitness_val))
         i += 1
+
+
+def format_fitness(fitness: float) -> str:
+    f = str(math.floor(fitness))
+    l = len(f)
+    n = math.floor(l / 3)
+
+    if n > 0 and l > 3:
+        r = l % 3
+        if r == 0:
+            n_dots = n - 1
+        else:
+            n_dots = n
+
+        for i in range(n_dots):
+            f = f[:-3 * (i + 1) - i] + "'" + f[-3 * (i + 1) - i:]
+
+    return f
+
+
 
 
 class GAModel:
@@ -917,25 +1008,54 @@ class GAModel:
         self.population = Population(pop_size=POPULATION_SIZE)
         self.population.initialize_random()
         best_ind = self.population.get_best_individual()
-        print('\t^ Best fitness:', math.floor(best_ind.fenotype.fitness_val) / 1000, '\n')
+        print('\t^ Best fitness:', format_fitness(fitness=best_ind.fenotype.fitness_val), '\n')
 
     def evaluate(self):
         best_ind = None
+
+        fitness_hist = []
+
         for i in range(GENERATIONS_NUM):
             print('Create new generation:', i)
             self.population.create_new_generation()
 
             best_ind = deepcopy(self.population.get_best_individual())
-            print('\t^ Best fitness:', math.floor(best_ind.fenotype.fitness_val) / 1000, '\n')
+            fitness = best_ind.fenotype.fitness_val
+            print('\t^ Best fitness:', format_fitness(fitness=fitness), '\n')
+            fitness_hist.append(fitness)
+
+            plt.plot(range(len(fitness_hist)), fitness_hist)
+            plt.title('fitness: i')
+            plt.grid()
+            plt.xlabel('Numer iteracji')
+            plt.ylabel('Koszt [euro]')
+            # plt.show()
+            plt.savefig('output\\' + '_fitness_' + str(i) + '.png')
+            plt.close()
 
         """ Plot best route """
         best_route_desc_h = best_ind.fenotype.get_route_desc(plane=Plane.HORIZONTAL)
         best_route_len_h = best_ind.fenotype.route_len_h
         best_p_descs_h = best_ind.genotype.get_points_descs(plane=Plane.HORIZONTAL)
         plot_route_2d(plane=Plane.HORIZONTAL, route_desc=best_route_desc_h, route_len=best_route_len_h,
-                      p_dicts=best_p_descs_h)
+                      p_dicts=best_p_descs_h, title='h: end best')
+
+        dicretized_points = best_ind.dicretize_route()
+        landform_hights = best_ind.get_landform_route_heights(route_points=dicretized_points)
+        d_points_disc = [elem['d'] for elem in dicretized_points]
+        landform = (d_points_disc, landform_hights)
 
         best_route_desc_v = best_ind.fenotype.get_route_desc(plane=Plane.VERTICAL)
         best_route_len_v = best_ind.fenotype.route_len_total
         plot_route_2d(plane=Plane.VERTICAL, route_desc=best_route_desc_v, route_len=best_route_len_v,
-                      p_dicts=best_ind.map_genotype_v_to_p_dicts())
+                      p_dicts=best_ind.map_genotype_v_to_p_dicts(), landform=landform, title='v: end best',
+                      z_min=min(landform_hights), z_max=max(landform_hights))
+
+        plt.plot(range(len(fitness_hist)), fitness_hist)
+        plt.title('fitness: end')
+        plt.grid()
+        plt.xlabel('Numer iteracji')
+        plt.ylabel('Koszt [euro]')
+        # plt.show()
+        plt.savefig('output\\' + '_fitness_change' + '.png')
+        plt.close()

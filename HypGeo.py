@@ -148,7 +148,9 @@ def get_route_len_2D(route_desc: List[Dict[str, Any]])-> float:
     return float(route_len)
 
 
-def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: float, p_dicts: List[Dict[str, int]]) -> None:
+def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: float,
+                  p_dicts: List[Dict[str, int]], landform=None, title=None,
+                  z_min=None, z_max=None) -> None:
     """
     Plot route in 2D
     Params:                                                                     type:
@@ -161,13 +163,19 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
 
     ax = plt.gca()
 
+    """ Evaluate y limits """
+
+
     """ Set map limits """
     if plane == Plane.HORIZONTAL:
         ax.set_xlim(MAP_LIMIT['xmin'], MAP_LIMIT['xmax'])
         ax.set_ylim(MAP_LIMIT['ymin'], MAP_LIMIT['ymax'])
     elif plane == Plane.VERTICAL:
         ax.set_xlim(- 0.1 * route_len, 1.1 * route_len)
-        ax.set_ylim(-300, 1000)
+        # ax.set_ylim(, 800)
+        # z_vals = [point['z'] for point in p_dicts]
+        ax.set_ylim(min(-900, z_min) - 100, max(2900, z_max) + 100)
+        # print('**-**', min(-300, min(z_vals)), max(800, max(z_vals)))
 
     for desc in route_desc:
         if desc['segment'] is None:
@@ -194,6 +202,8 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
             ax.scatter(pRx, pRy, cmap='viridis', linewidth=1)
             ax.text(pRx, pRy, 'r' + str(route_desc.index(desc)) + str(route_desc.index(desc) + 1), color='black')
 
+            plt.title(title)
+
         else:
             """ Add segment to plot """
             p1, p2 = desc['segment'].points
@@ -203,8 +213,10 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
             ax.add_collection(segment)
 
     """ Add points to plot """
+    z_max, z_min = 0, 0
     for point in p_dicts:
         x, y = (point['x'], point['y']) if (plane == Plane.HORIZONTAL) else (point['d'], point['z'])
+
         ax.scatter(x, y, cmap='viridis', linewidth=1)
         if point == p_dicts[0]:
             ax.text(x, y, 'KRK', color='black')
@@ -214,8 +226,23 @@ def plot_route_2d(plane: Plane, route_desc: List[Dict[str, Any]], route_len: flo
             ax.text(x, y, str(p_dicts.index(point)), color='black')
             pass
 
+    """ Add landform for vertical """
+    if landform is not None and plane == Plane.VERTICAL:
+        d, z = landform
+        plt.plot(d, z)
+
+    if plane == Plane.HORIZONTAL:
+        ax.set_xlabel('Współrzędne oś x [m]\n')
+        ax.set_ylabel('\nWspółrzędne oś y [m]')
+    else:
+        ax.set_xlabel('Długość trasy [m]')
+        ax.set_ylabel('Wysokość n.p.m. [m]')
+
     ax.grid()
-    plt.show()
+    # plt.show()
+
+    plt.savefig('output\\' + title + '.png')
+    plt.close()
 
 
 def dir_to_rad(direction_point: sp.Point2D) -> Union[float, sp.atan]:
